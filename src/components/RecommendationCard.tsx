@@ -58,7 +58,7 @@ export default function RecommendationCard({ recommendation, index }: Recommenda
         </div>
 
         {/* Stats */}
-        <div className="flex gap-4 shrink-0 text-right">
+        <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 shrink-0 text-right">
           <div>
             <div className="text-xs text-zinc-500">Time</div>
             <div className="text-sm font-mono text-emerald-400">
@@ -75,7 +75,7 @@ export default function RecommendationCard({ recommendation, index }: Recommenda
       </div>
 
       {/* Lap comparison */}
-      <div className="mt-3 flex gap-6 text-xs text-zinc-500">
+      <div className="mt-3 flex gap-3 sm:gap-6 flex-wrap text-xs text-zinc-500">
         <span>
           {driverOut.nameAcronym}: {formatTime(driverOut.bestLapTime)} / ${driverOut.price?.toFixed(1)}M
         </span>

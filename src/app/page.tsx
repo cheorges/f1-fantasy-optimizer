@@ -106,14 +106,14 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-zinc-800 bg-zinc-950/80 sticky top-0 z-10 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <h1 className="text-xl font-bold">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold truncate">
                 <span className="text-red-500">F1</span> Fantasy Optimizer
               </h1>
               {meeting && (
-                <p className="text-sm text-zinc-400 mt-0.5">
+                <p className="text-xs sm:text-sm text-zinc-400 mt-0.5 truncate">
                   {meeting.meeting_name} - {meeting.country_name}
                 </p>
               )}
@@ -130,7 +130,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         {error && (
           <div className="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300">
             {error}
@@ -172,7 +172,7 @@ export default function Home() {
                 />
               </div>
 
-              <div className="p-4">
+              <div className="p-3 sm:p-4">
                 {loadingRecs ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-600 border-t-transparent" />
