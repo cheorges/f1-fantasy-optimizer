@@ -16,6 +16,7 @@ import BudgetInput from "@/components/BudgetInput";
 import RecommendationCard from "@/components/RecommendationCard";
 import ConstructorRecommendationCard from "@/components/ConstructorRecommendationCard";
 import PriceTable from "@/components/PriceTable";
+import InfoTooltip from "@/components/InfoTooltip";
 
 type ActiveTab = "performance" | "prices";
 
@@ -248,10 +249,11 @@ export default function Home() {
 
                 {/* Recommendations */}
                 <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-zinc-800">
+                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <h2 className="font-semibold text-zinc-200">
                       Driver Swap Recommendations
                     </h2>
+                    <InfoTooltip text="Each recommendation shows a driver swap that would make your team faster. The driver on the left (red) is the one you'd drop, the driver on the right (green) is the replacement. Only swaps within your available budget are shown. Recommendations are sorted by biggest lap time improvement first." />
                   </div>
 
                   <div className="p-3 sm:p-4">
@@ -287,10 +289,11 @@ export default function Home() {
 
                 {/* Constructor Recommendations */}
                 <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-zinc-800">
+                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <h2 className="font-semibold text-zinc-200">
                       Constructor Swap Recommendations
                     </h2>
+                    <InfoTooltip text="Each recommendation shows a constructor swap that would make your team faster. A constructor's performance is based on their fastest driver's lap time in the selected practice session. The constructor on the left (red) is the one you'd drop, the one on the right (green) is the replacement. Only swaps within your available budget are shown." />
                   </div>
 
                   <div className="p-3 sm:p-4">
