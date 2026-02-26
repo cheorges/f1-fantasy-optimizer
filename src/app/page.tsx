@@ -237,17 +237,21 @@ export default function Home() {
                   <DriverTable drivers={drivers} loading={loadingDrivers} />
                 </div>
 
+                {/* Shared Budget Input */}
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
+                  <BudgetInput
+                    value={budget}
+                    onChange={handleBudgetChange}
+                    disabled={isLoading}
+                  />
+                </div>
+
                 {/* Recommendations */}
                 <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="px-4 py-3 border-b border-zinc-800">
                     <h2 className="font-semibold text-zinc-200">
-                      Swap Recommendations
+                      Driver Swap Recommendations
                     </h2>
-                    <BudgetInput
-                      value={budget}
-                      onChange={handleBudgetChange}
-                      disabled={isLoading}
-                    />
                   </div>
 
                   <div className="p-3 sm:p-4">

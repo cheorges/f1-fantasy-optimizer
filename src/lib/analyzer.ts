@@ -150,19 +150,7 @@ function matchFantasyConstructor(
   priceMap: Map<string, FantasyConstructor>,
 ): FantasyConstructor | null {
   const upperTeam = teamName.toUpperCase();
-
-  // Exact match
-  const exact = priceMap.get(upperTeam);
-  if (exact) return exact;
-
-  // Contains match: shorter name is contained in longer name
-  for (const [key, fc] of priceMap) {
-    if (upperTeam.includes(key) || key.includes(upperTeam)) {
-      return fc;
-    }
-  }
-
-  return null;
+  return priceMap.get(upperTeam) ?? null;
 }
 
 export async function analyzeConstructors(
