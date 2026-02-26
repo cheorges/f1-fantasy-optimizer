@@ -248,7 +248,7 @@ export default function Home() {
                 </div>
 
                 {/* Recommendations */}
-                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800">
                   <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <h2 className="font-semibold text-zinc-200">
                       Driver Swap Recommendations
@@ -288,7 +288,7 @@ export default function Home() {
                 </div>
 
                 {/* Constructor Recommendations */}
-                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800">
                   <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <h2 className="font-semibold text-zinc-200">
                       Constructor Swap Recommendations
