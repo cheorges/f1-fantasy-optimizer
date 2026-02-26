@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { FantasyDriver, FantasyConstructor } from "@/lib/types";
+import InfoTooltip from "@/components/InfoTooltip";
 
 type DriverSortField = "price" | "priceChange" | "selectedPercentage" | "overallPoints";
 type ConstructorSortField = "price" | "priceChange" | "selectedPercentage" | "overallPoints";
@@ -66,9 +67,12 @@ function DriverPriceSection({ drivers }: { drivers: FantasyDriver[] }) {
   const { sorted, handleSort, indicator, sortField } = useSortable(drivers, "price");
 
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+    <div className="bg-zinc-900 rounded-xl border border-zinc-800">
       <div className="px-3 sm:px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-        <h2 className="font-semibold text-zinc-200">Driver Prices</h2>
+        <div className="flex items-center">
+          <h2 className="font-semibold text-zinc-200">Driver Prices</h2>
+          <InfoTooltip text="All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this driver. Points are the total F1 Fantasy points earned this season." />
+        </div>
         <span className="text-xs text-zinc-500">{drivers.length} drivers</span>
       </div>
 
@@ -183,9 +187,12 @@ function ConstructorPriceSection({ constructors }: { constructors: FantasyConstr
   const { sorted, handleSort, indicator, sortField } = useSortable(constructors, "price");
 
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+    <div className="bg-zinc-900 rounded-xl border border-zinc-800">
       <div className="px-3 sm:px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-        <h2 className="font-semibold text-zinc-200">Constructor Prices</h2>
+        <div className="flex items-center">
+          <h2 className="font-semibold text-zinc-200">Constructor Prices</h2>
+          <InfoTooltip text="All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this constructor. Points are the total F1 Fantasy points earned this season." />
+        </div>
         <span className="text-xs text-zinc-500">{constructors.length} constructors</span>
       </div>
 

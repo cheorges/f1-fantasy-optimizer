@@ -224,11 +224,14 @@ export default function Home() {
             ) : (
               <>
                 {/* Driver Table */}
-                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800">
                   <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-                    <h2 className="font-semibold text-zinc-200">
-                      Driver Performance & Value
-                    </h2>
+                    <div className="flex items-center">
+                      <h2 className="font-semibold text-zinc-200">
+                        Driver Performance & Value
+                      </h2>
+                      <InfoTooltip text="Lap times and sector data come from the OpenF1 API, based on the selected practice session (FP1/FP2/FP3). Prices and value scores come from the official F1 Fantasy game. The value score combines pace and price — higher means more performance per dollar." />
+                    </div>
                     {drivers.length > 0 && (
                       <span className="text-xs text-zinc-500">
                         {drivers[0]?.sessionName} - {drivers.length} drivers
@@ -249,11 +252,13 @@ export default function Home() {
 
                 {/* Recommendations */}
                 <div className="bg-zinc-900 rounded-xl border border-zinc-800">
-                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-                    <h2 className="font-semibold text-zinc-200">
-                      Driver Swap Recommendations
-                    </h2>
-                    <InfoTooltip text="Each recommendation shows a driver swap that would make your team faster. The driver on the left (red) is the one you'd drop, the driver on the right (green) is the replacement. Only swaps within your available budget are shown. Recommendations are sorted by biggest lap time improvement first." />
+                  <div className="px-4 py-3 border-b border-zinc-800">
+                    <div className="flex items-center">
+                      <h2 className="font-semibold text-zinc-200">
+                        Driver Swap Recommendations
+                      </h2>
+                      <InfoTooltip text="Each recommendation shows a driver swap that would make your team faster. The driver on the left (red) is the one you'd drop, the driver on the right (green) is the replacement. Only swaps within your available budget are shown. Recommendations are sorted by biggest lap time improvement first." />
+                    </div>
                   </div>
 
                   <div className="p-3 sm:p-4">
@@ -289,11 +294,13 @@ export default function Home() {
 
                 {/* Constructor Recommendations */}
                 <div className="bg-zinc-900 rounded-xl border border-zinc-800">
-                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-                    <h2 className="font-semibold text-zinc-200">
-                      Constructor Swap Recommendations
-                    </h2>
-                    <InfoTooltip text="Each recommendation shows a constructor swap that would make your team faster. A constructor's performance is based on their fastest driver's lap time in the selected practice session. The constructor on the left (red) is the one you'd drop, the one on the right (green) is the replacement. Only swaps within your available budget are shown." />
+                  <div className="px-4 py-3 border-b border-zinc-800">
+                    <div className="flex items-center">
+                      <h2 className="font-semibold text-zinc-200">
+                        Constructor Swap Recommendations
+                      </h2>
+                      <InfoTooltip text="Each recommendation shows a constructor swap that would make your team faster. A constructor's performance is based on their fastest driver's lap time in the selected practice session. The constructor on the left (red) is the one you'd drop, the one on the right (green) is the replacement. Only swaps within your available budget are shown." />
+                    </div>
                   </div>
 
                   <div className="p-3 sm:p-4">
