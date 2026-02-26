@@ -1,64 +1,209 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import type { Session, Meeting, DriverAnalysis, SwapRecommendation } from "@/lib/types";
+import SessionSelector from "@/components/SessionSelector";
+import DriverTable from "@/components/DriverTable";
+import BudgetInput from "@/components/BudgetInput";
+import RecommendationCard from "@/components/RecommendationCard";
+
+interface SessionsResponse {
+  meeting: Meeting;
+  sessions: Session[];
+}
+
+interface DriversResponse {
+  drivers: DriverAnalysis[];
+}
+
+interface RecommendationsResponse {
+  budget: number;
+  recommendations: SwapRecommendation[];
+}
 
 export default function Home() {
+  const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [selectedSession, setSelectedSession] = useState<number | null>(null);
+  const [drivers, setDrivers] = useState<DriverAnalysis[]>([]);
+  const [recommendations, setRecommendations] = useState<SwapRecommendation[]>([]);
+  const [budget, setBudget] = useState(0);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchSessions() {
+      try {
+        const res = await fetch("/api/sessions");
+        if (!res.ok) throw new Error("Failed to load sessions");
+        const data: SessionsResponse = await res.json();
+        setMeeting(data.meeting);
+        setSessions(data.sessions);
+
+        if (data.sessions.length > 0) {
+          const latest = data.sessions[data.sessions.length - 1]!;
+          setSelectedSession(latest.session_key);
+        }
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setLoadingSessions(false);
+      }
+    }
+    fetchSessions();
+  }, []);
+
+  const fetchDrivers = useCallback(async (sessionKey: number) => {
+    setLoadingDrivers(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/drivers?session_key=${sessionKey}`);
+      if (!res.ok) throw new Error("Failed to load driver data");
+      const data: DriversResponse = await res.json();
+      setDrivers(data.drivers);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoadingDrivers(false);
+    }
+  }, []);
+
+  const fetchRecommendations = useCallback(async (sessionKey: number, budgetVal: number) => {
+    setLoadingRecs(true);
+    try {
+      const res = await fetch(
+        `/api/recommendations?budget=${budgetVal}&session_key=${sessionKey}`,
+      );
+      if (!res.ok) throw new Error("Failed to load recommendations");
+      const data: RecommendationsResponse = await res.json();
+      setRecommendations(data.recommendations);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoadingRecs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedSession !== null) {
+      fetchDrivers(selectedSession);
+      fetchRecommendations(selectedSession, budget);
+    }
+  }, [selectedSession, fetchDrivers, fetchRecommendations, budget]);
+
+  function handleSessionSelect(sessionKey: number) {
+    setSelectedSession(sessionKey);
+  }
+
+  function handleBudgetChange(newBudget: number) {
+    setBudget(newBudget);
+  }
+
+  const isLoading = loadingDrivers || loadingRecs;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen">
+      <header className="border-b border-zinc-800 bg-zinc-950/80 sticky top-0 z-10 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-bold">
+                <span className="text-red-500">F1</span> Fantasy Optimizer
+              </h1>
+              {meeting && (
+                <p className="text-sm text-zinc-400 mt-0.5">
+                  {meeting.meeting_name} - {meeting.country_name}
+                </p>
+              )}
+            </div>
+            {!loadingSessions && (
+              <SessionSelector
+                sessions={sessions}
+                selectedKey={selectedSession}
+                onSelect={handleSessionSelect}
+                loading={isLoading}
+              />
+            )}
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-6">
+        {error && (
+          <div className="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300">
+            {error}
+          </div>
+        )}
+
+        {loadingSessions ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-600 border-t-transparent" />
+            <span className="ml-3 text-zinc-400">Loading sessions...</span>
+          </div>
+        ) : (
+          <>
+            {/* Driver Table */}
+            <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+              <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                <h2 className="font-semibold text-zinc-200">
+                  Driver Performance & Value
+                </h2>
+                {drivers.length > 0 && (
+                  <span className="text-xs text-zinc-500">
+                    {drivers[0]?.sessionName} - {drivers.length} drivers
+                  </span>
+                )}
+              </div>
+              <DriverTable drivers={drivers} loading={loadingDrivers} />
+            </div>
+
+            {/* Recommendations */}
+            <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+              <div className="px-4 py-3 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h2 className="font-semibold text-zinc-200">
+                  Swap Recommendations
+                </h2>
+                <BudgetInput
+                  value={budget}
+                  onChange={handleBudgetChange}
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="p-4">
+                {loadingRecs ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-600 border-t-transparent" />
+                    <span className="ml-3 text-zinc-400 text-sm">Calculating...</span>
+                  </div>
+                ) : recommendations.length === 0 ? (
+                  <div className="text-center py-8 text-zinc-500 text-sm">
+                    {drivers.length === 0
+                      ? "Select a practice session to see recommendations"
+                      : "No swap recommendations for this budget. Try increasing your budget."}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {recommendations.slice(0, 20).map((rec, i) => (
+                      <RecommendationCard
+                        key={`${rec.driverOut.driverNumber}-${rec.driverIn.driverNumber}`}
+                        recommendation={rec}
+                        index={i}
+                      />
+                    ))}
+                    {recommendations.length > 20 && (
+                      <p className="text-center text-xs text-zinc-600 pt-2">
+                        Showing top 20 of {recommendations.length} recommendations
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
