@@ -1,4 +1,5 @@
 const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+const MAX_CACHE_ENTRIES = 100;
 
 interface CacheEntry<T> {
   data: T;
@@ -6,6 +7,20 @@ interface CacheEntry<T> {
 }
 
 const store = new Map<string, CacheEntry<unknown>>();
+
+function evictOldest(): void {
+  let oldestKey: string | null = null;
+  let oldestTime = Infinity;
+
+  for (const [key, entry] of store) {
+    if (entry.expiresAt < oldestTime) {
+      oldestTime = entry.expiresAt;
+      oldestKey = key;
+    }
+  }
+
+  if (oldestKey) store.delete(oldestKey);
+}
 
 export function getCached<T>(key: string): T | null {
   const entry = store.get(key) as CacheEntry<T> | undefined;
@@ -20,6 +35,10 @@ export function getCached<T>(key: string): T | null {
 }
 
 export function setCache<T>(key: string, data: T, ttlMs: number = DEFAULT_TTL_MS): void {
+  if (store.size >= MAX_CACHE_ENTRIES && !store.has(key)) {
+    evictOldest();
+  }
+
   store.set(key, {
     data,
     expiresAt: Date.now() + ttlMs,
@@ -37,8 +56,4 @@ export async function getOrFetch<T>(
   const data = await fetcher();
   setCache(key, data, ttlMs);
   return data;
-}
-
-export function clearCache(): void {
-  store.clear();
 }

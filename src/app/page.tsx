@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type {
   Session,
   Meeting,
@@ -84,44 +84,48 @@ export default function Home() {
     fetchSessions();
   }, []);
 
-  const fetchDrivers = useCallback(async (sessionKey: number) => {
-    setLoadingDrivers(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/drivers?session_key=${sessionKey}`);
-      if (!res.ok) throw new Error("Failed to load driver data");
-      const data: DriversResponse = await res.json();
-      setDrivers(data.drivers);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoadingDrivers(false);
-    }
-  }, []);
-
-  const fetchRecommendations = useCallback(async (sessionKey: number, budgetVal: number) => {
-    setLoadingRecs(true);
-    try {
-      const res = await fetch(
-        `/api/recommendations?budget=${budgetVal}&session_key=${sessionKey}`,
-      );
-      if (!res.ok) throw new Error("Failed to load recommendations");
-      const data: RecommendationsResponse = await res.json();
-      setRecommendations(data.recommendations);
-      setConstructorRecs(data.constructorRecommendations);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoadingRecs(false);
-    }
-  }, []);
-
   useEffect(() => {
-    if (selectedSession !== null) {
-      fetchDrivers(selectedSession);
-      fetchRecommendations(selectedSession, budget);
+    if (selectedSession === null) return;
+
+    let cancelled = false;
+
+    async function loadData() {
+      setLoadingDrivers(true);
+      setLoadingRecs(true);
+      setError(null);
+
+      try {
+        const [driversRes, recsRes] = await Promise.all([
+          fetch(`/api/drivers?session_key=${selectedSession}`),
+          fetch(`/api/recommendations?budget=${budget}&session_key=${selectedSession}`),
+        ]);
+
+        if (cancelled) return;
+
+        if (!driversRes.ok) throw new Error("Failed to load driver data");
+        if (!recsRes.ok) throw new Error("Failed to load recommendations");
+
+        const driversData: DriversResponse = await driversRes.json();
+        const recsData: RecommendationsResponse = await recsRes.json();
+
+        if (cancelled) return;
+
+        setDrivers(driversData.drivers);
+        setRecommendations(recsData.recommendations);
+        setConstructorRecs(recsData.constructorRecommendations);
+      } catch (err) {
+        if (!cancelled) setError(String(err));
+      } finally {
+        if (!cancelled) {
+          setLoadingDrivers(false);
+          setLoadingRecs(false);
+        }
+      }
     }
-  }, [selectedSession, fetchDrivers, fetchRecommendations, budget]);
+
+    loadData();
+    return () => { cancelled = true; };
+  }, [selectedSession, budget]);
 
   // Lazy fetch prices when tab is first activated
   useEffect(() => {
@@ -186,6 +190,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-3 sm:px-4 flex gap-0">
           <button
             onClick={() => setActiveTab("performance")}
+            aria-selected={activeTab === "performance"}
+            role="tab"
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "performance"
                 ? "border-red-500 text-white"
@@ -196,6 +202,8 @@ export default function Home() {
           </button>
           <button
             onClick={() => setActiveTab("prices")}
+            aria-selected={activeTab === "prices"}
+            role="tab"
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "prices"
                 ? "border-red-500 text-white"

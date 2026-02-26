@@ -2,8 +2,18 @@ import { getOrFetch } from "./cache";
 import type { FantasyDriver, FantasyConstructor, FantasyData } from "./types";
 
 const FANTASY_FEED_URL = "https://fantasy.formula1.com/feeds/drivers";
-const CALENDAR_URL = "https://api.jolpi.ca/ergast/f1/2026.json";
+const CURRENT_YEAR = new Date().getFullYear();
+const CALENDAR_URL = `https://api.jolpi.ca/ergast/f1/${CURRENT_YEAR}.json`;
 const CACHE_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    const response = await fetch(url);
+    if (response.ok || response.status < 500) return response;
+    if (i < retries - 1) await new Promise((r) => setTimeout(r, 1000 * 2 ** i));
+  }
+  return fetch(url);
+}
 
 interface RawFantasyPlayer {
   PlayerId: string;
@@ -47,7 +57,7 @@ async function getCurrentRound(): Promise<number> {
   return getOrFetch(
     "fantasy:current-round",
     async () => {
-      const response = await fetch(CALENDAR_URL);
+      const response = await fetchWithRetry(CALENDAR_URL);
       if (!response.ok) return 1;
 
       const data = (await response.json()) as ErgastResponse;
@@ -101,7 +111,7 @@ export async function getFantasyData(): Promise<FantasyData> {
   return getOrFetch(
     `fantasy:data:${round}`,
     async () => {
-      const response = await fetch(`${FANTASY_FEED_URL}/${round}_en.json`);
+      const response = await fetchWithRetry(`${FANTASY_FEED_URL}/${round}_en.json`);
       if (!response.ok) {
         throw new Error(`Fantasy API error: ${response.status} ${response.statusText}`);
       }

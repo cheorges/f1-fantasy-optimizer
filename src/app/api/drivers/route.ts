@@ -8,10 +8,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const sessionKey = request.nextUrl.searchParams.get("session_key");
-    const drivers = await analyzeDrivers(
-      sessionKey ? parseInt(sessionKey, 10) : undefined,
-    );
+    const sessionKeyParam = request.nextUrl.searchParams.get("session_key");
+    const sessionKey = sessionKeyParam ? parseInt(sessionKeyParam, 10) : undefined;
+    if (sessionKey !== undefined && (isNaN(sessionKey) || sessionKey <= 0)) {
+      return NextResponse.json({ error: "Invalid session_key" }, { status: 400 });
+    }
+    const drivers = await analyzeDrivers(sessionKey);
 
     return NextResponse.json({ drivers });
   } catch (error) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { ConstructorSwapRecommendation } from "@/lib/types";
 
 interface ConstructorRecommendationCardProps {
@@ -7,7 +8,7 @@ interface ConstructorRecommendationCardProps {
   index: number;
 }
 
-export default function ConstructorRecommendationCard({
+function ConstructorRecommendationCard({
   recommendation,
   index,
 }: ConstructorRecommendationCardProps) {
@@ -76,3 +77,5 @@ export default function ConstructorRecommendationCard({
     </div>
   );
 }
+
+export default memo(ConstructorRecommendationCard);

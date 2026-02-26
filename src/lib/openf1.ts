@@ -4,13 +4,22 @@ import type { Session, Lap, Driver, DriverPerformance, Meeting } from "./types";
 const BASE_URL = "https://api.openf1.org/v1";
 const CACHE_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
+async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    const response = await fetch(url);
+    if (response.ok || response.status < 500) return response;
+    if (i < retries - 1) await new Promise((r) => setTimeout(r, 1000 * 2 ** i));
+  }
+  return fetch(url);
+}
+
 async function fetchJson<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
 
-  const response = await fetch(url.toString());
+  const response = await fetchWithRetry(url.toString());
   if (!response.ok) {
     throw new Error(`OpenF1 API error: ${response.status} ${response.statusText} for ${path}`);
   }
@@ -21,7 +30,7 @@ async function fetchJson<T>(path: string, params: Record<string, string> = {}): 
 export async function getLatestMeeting(): Promise<Meeting | null> {
   const meetings = await getOrFetch(
     "meetings:latest",
-    () => fetchJson<Meeting[]>("/meetings", { year: "2026" }),
+    () => fetchJson<Meeting[]>("/meetings", { year: String(new Date().getFullYear()) }),
     CACHE_TTL_MS,
   );
 

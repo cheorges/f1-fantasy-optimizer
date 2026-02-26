@@ -132,6 +132,7 @@ export default function DriverTable({ drivers, loading }: DriverTableProps) {
             <button
               key={field}
               onClick={() => handleSort(field)}
+              aria-label={`Sort by ${label}`}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 sortField === field
                   ? "bg-red-600 text-white"
@@ -199,6 +200,7 @@ export default function DriverTable({ drivers, loading }: DriverTableProps) {
               <th
                 className="py-3 px-2 cursor-pointer hover:text-zinc-200"
                 onClick={() => handleSort("bestLapTime")}
+                aria-sort={sortField === "bestLapTime" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
               >
                 Best Lap{sortIndicator("bestLapTime")}
               </th>
@@ -208,18 +210,21 @@ export default function DriverTable({ drivers, loading }: DriverTableProps) {
               <th
                 className="py-3 px-2 cursor-pointer hover:text-zinc-200"
                 onClick={() => handleSort("topSpeed")}
+                aria-sort={sortField === "topSpeed" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
               >
                 Top Speed{sortIndicator("topSpeed")}
               </th>
               <th
                 className="py-3 px-2 cursor-pointer hover:text-zinc-200"
                 onClick={() => handleSort("price")}
+                aria-sort={sortField === "price" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
               >
                 Price{sortIndicator("price")}
               </th>
               <th
                 className="py-3 px-2 cursor-pointer hover:text-zinc-200"
                 onClick={() => handleSort("valueScore")}
+                aria-sort={sortField === "valueScore" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
               >
                 Value{sortIndicator("valueScore")}
               </th>

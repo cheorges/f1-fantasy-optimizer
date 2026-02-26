@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { SwapRecommendation } from "@/lib/types";
 
 interface RecommendationCardProps {
@@ -14,7 +15,7 @@ function formatTime(seconds: number | null): string {
   return `${mins}:${secs.toFixed(3).padStart(6, "0")}`;
 }
 
-export default function RecommendationCard({ recommendation, index }: RecommendationCardProps) {
+function RecommendationCard({ recommendation, index }: RecommendationCardProps) {
   const { driverOut, driverIn, timeDelta, priceDelta } = recommendation;
 
   return (
@@ -86,3 +87,5 @@ export default function RecommendationCard({ recommendation, index }: Recommenda
     </div>
   );
 }
+
+export default memo(RecommendationCard);
