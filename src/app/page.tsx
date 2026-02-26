@@ -1,11 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { Session, Meeting, DriverAnalysis, SwapRecommendation } from "@/lib/types";
+import type {
+  Session,
+  Meeting,
+  DriverAnalysis,
+  SwapRecommendation,
+  FantasyDriver,
+  FantasyConstructor,
+} from "@/lib/types";
 import SessionSelector from "@/components/SessionSelector";
 import DriverTable from "@/components/DriverTable";
 import BudgetInput from "@/components/BudgetInput";
 import RecommendationCard from "@/components/RecommendationCard";
+import PriceTable from "@/components/PriceTable";
+
+type ActiveTab = "performance" | "prices";
 
 interface SessionsResponse {
   meeting: Meeting;
@@ -21,7 +31,14 @@ interface RecommendationsResponse {
   recommendations: SwapRecommendation[];
 }
 
+interface PricesResponse {
+  drivers: FantasyDriver[];
+  constructors: FantasyConstructor[];
+  round: number;
+}
+
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>("performance");
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
@@ -32,6 +49,13 @@ export default function Home() {
   const [loadingDrivers, setLoadingDrivers] = useState(false);
   const [loadingRecs, setLoadingRecs] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Prices tab state
+  const [priceDrivers, setPriceDrivers] = useState<FantasyDriver[]>([]);
+  const [priceConstructors, setPriceConstructors] = useState<FantasyConstructor[]>([]);
+  const [priceRound, setPriceRound] = useState(0);
+  const [loadingPrices, setLoadingPrices] = useState(false);
+  const [pricesFetched, setPricesFetched] = useState(false);
 
   useEffect(() => {
     async function fetchSessions() {
@@ -93,6 +117,29 @@ export default function Home() {
     }
   }, [selectedSession, fetchDrivers, fetchRecommendations, budget]);
 
+  // Lazy fetch prices when tab is first activated
+  useEffect(() => {
+    if (activeTab !== "prices" || pricesFetched) return;
+
+    async function fetchPrices() {
+      setLoadingPrices(true);
+      try {
+        const res = await fetch("/api/prices");
+        if (!res.ok) throw new Error("Failed to load prices");
+        const data: PricesResponse = await res.json();
+        setPriceDrivers(data.drivers);
+        setPriceConstructors(data.constructors);
+        setPriceRound(data.round);
+        setPricesFetched(true);
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setLoadingPrices(false);
+      }
+    }
+    fetchPrices();
+  }, [activeTab, pricesFetched]);
+
   function handleSessionSelect(sessionKey: number) {
     setSelectedSession(sessionKey);
   }
@@ -118,7 +165,7 @@ export default function Home() {
                 </p>
               )}
             </div>
-            {!loadingSessions && (
+            {activeTab === "performance" && !loadingSessions && (
               <SessionSelector
                 sessions={sessions}
                 selectedKey={selectedSession}
@@ -127,6 +174,30 @@ export default function Home() {
               />
             )}
           </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 flex gap-0">
+          <button
+            onClick={() => setActiveTab("performance")}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "performance"
+                ? "border-red-500 text-white"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Performance
+          </button>
+          <button
+            onClick={() => setActiveTab("prices")}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "prices"
+                ? "border-red-500 text-white"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Prices
+          </button>
         </div>
       </header>
 
@@ -137,72 +208,85 @@ export default function Home() {
           </div>
         )}
 
-        {loadingSessions ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-600 border-t-transparent" />
-            <span className="ml-3 text-zinc-400">Loading sessions...</span>
-          </div>
-        ) : (
+        {activeTab === "performance" && (
           <>
-            {/* Driver Table */}
-            <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-              <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-                <h2 className="font-semibold text-zinc-200">
-                  Driver Performance & Value
-                </h2>
-                {drivers.length > 0 && (
-                  <span className="text-xs text-zinc-500">
-                    {drivers[0]?.sessionName} - {drivers.length} drivers
-                  </span>
-                )}
+            {loadingSessions ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-600 border-t-transparent" />
+                <span className="ml-3 text-zinc-400">Loading sessions...</span>
               </div>
-              <DriverTable drivers={drivers} loading={loadingDrivers} />
-            </div>
-
-            {/* Recommendations */}
-            <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-              <div className="px-4 py-3 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h2 className="font-semibold text-zinc-200">
-                  Swap Recommendations
-                </h2>
-                <BudgetInput
-                  value={budget}
-                  onChange={handleBudgetChange}
-                  disabled={isLoading}
-                />
-              </div>
-
-              <div className="p-3 sm:p-4">
-                {loadingRecs ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-600 border-t-transparent" />
-                    <span className="ml-3 text-zinc-400 text-sm">Calculating...</span>
-                  </div>
-                ) : recommendations.length === 0 ? (
-                  <div className="text-center py-8 text-zinc-500 text-sm">
-                    {drivers.length === 0
-                      ? "Select a practice session to see recommendations"
-                      : "No swap recommendations for this budget. Try increasing your budget."}
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {recommendations.slice(0, 20).map((rec, i) => (
-                      <RecommendationCard
-                        key={`${rec.driverOut.driverNumber}-${rec.driverIn.driverNumber}`}
-                        recommendation={rec}
-                        index={i}
-                      />
-                    ))}
-                    {recommendations.length > 20 && (
-                      <p className="text-center text-xs text-zinc-600 pt-2">
-                        Showing top 20 of {recommendations.length} recommendations
-                      </p>
+            ) : (
+              <>
+                {/* Driver Table */}
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                    <h2 className="font-semibold text-zinc-200">
+                      Driver Performance & Value
+                    </h2>
+                    {drivers.length > 0 && (
+                      <span className="text-xs text-zinc-500">
+                        {drivers[0]?.sessionName} - {drivers.length} drivers
+                      </span>
                     )}
                   </div>
-                )}
-              </div>
-            </div>
+                  <DriverTable drivers={drivers} loading={loadingDrivers} />
+                </div>
+
+                {/* Recommendations */}
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <h2 className="font-semibold text-zinc-200">
+                      Swap Recommendations
+                    </h2>
+                    <BudgetInput
+                      value={budget}
+                      onChange={handleBudgetChange}
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="p-3 sm:p-4">
+                    {loadingRecs ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-600 border-t-transparent" />
+                        <span className="ml-3 text-zinc-400 text-sm">Calculating...</span>
+                      </div>
+                    ) : recommendations.length === 0 ? (
+                      <div className="text-center py-8 text-zinc-500 text-sm">
+                        {drivers.length === 0
+                          ? "Select a practice session to see recommendations"
+                          : "No swap recommendations for this budget. Try increasing your budget."}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {recommendations.slice(0, 20).map((rec, i) => (
+                          <RecommendationCard
+                            key={`${rec.driverOut.driverNumber}-${rec.driverIn.driverNumber}`}
+                            recommendation={rec}
+                            index={i}
+                          />
+                        ))}
+                        {recommendations.length > 20 && (
+                          <p className="text-center text-xs text-zinc-600 pt-2">
+                            Showing top 20 of {recommendations.length} recommendations
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </>
+        )}
+
+        {activeTab === "prices" && (
+          <PriceTable
+            drivers={priceDrivers}
+            constructors={priceConstructors}
+            round={priceRound}
+            loading={loadingPrices}
+          />
         )}
       </main>
     </div>
