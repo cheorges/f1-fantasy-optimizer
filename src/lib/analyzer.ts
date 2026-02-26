@@ -1,6 +1,14 @@
 import { getDriverPerformances, getPracticeSessions, getLatestMeeting } from "./openf1";
-import { getDriverPrices } from "./fantasy";
-import type { DriverAnalysis, DriverPerformance, FantasyDriver, SwapRecommendation } from "./types";
+import { getDriverPrices, getConstructorPrices } from "./fantasy";
+import type {
+  DriverAnalysis,
+  DriverPerformance,
+  FantasyDriver,
+  FantasyConstructor,
+  SwapRecommendation,
+  ConstructorAnalysis,
+  ConstructorSwapRecommendation,
+} from "./types";
 
 function matchFantasyDriver(
   performance: DriverPerformance,
@@ -131,6 +139,123 @@ export function generateRecommendations(
   }
 
   // Sort: best time improvement first, then best value improvement
+  return recommendations.sort((a, b) => {
+    if (Math.abs(a.timeDelta - b.timeDelta) > 0.01) return b.timeDelta - a.timeDelta;
+    return b.valueScoreDelta - a.valueScoreDelta;
+  });
+}
+
+function matchFantasyConstructor(
+  teamName: string,
+  priceMap: Map<string, FantasyConstructor>,
+): FantasyConstructor | null {
+  const upperTeam = teamName.toUpperCase();
+
+  // Exact match
+  const exact = priceMap.get(upperTeam);
+  if (exact) return exact;
+
+  // Contains match: shorter name is contained in longer name
+  for (const [key, fc] of priceMap) {
+    if (upperTeam.includes(key) || key.includes(upperTeam)) {
+      return fc;
+    }
+  }
+
+  return null;
+}
+
+export async function analyzeConstructors(
+  drivers: DriverAnalysis[],
+): Promise<ConstructorAnalysis[]> {
+  const constructorPrices = await getConstructorPrices();
+
+  // Group drivers by team
+  const teamMap = new Map<string, DriverAnalysis[]>();
+  for (const driver of drivers) {
+    const existing = teamMap.get(driver.teamName) ?? [];
+    existing.push(driver);
+    teamMap.set(driver.teamName, existing);
+  }
+
+  const constructors: ConstructorAnalysis[] = [];
+
+  for (const [teamName, teamDrivers] of teamMap) {
+    const validLaps = teamDrivers
+      .map((d) => d.bestLapTime)
+      .filter((t): t is number => t !== null);
+
+    const bestLapTime = validLaps.length > 0 ? Math.min(...validLaps) : null;
+    const avgLapTime = validLaps.length > 0
+      ? validLaps.reduce((sum, t) => sum + t, 0) / validLaps.length
+      : null;
+
+    const fantasy = matchFantasyConstructor(teamName, constructorPrices);
+    const teamColour = teamDrivers[0]?.teamColour ?? "666666";
+
+    constructors.push({
+      name: teamName,
+      teamColour,
+      bestLapTime,
+      avgLapTime,
+      drivers: teamDrivers.map((d) => d.nameAcronym),
+      price: fantasy?.price ?? null,
+      priceChange: fantasy?.priceChange ?? null,
+      selectedPercentage: fantasy?.selectedPercentage ?? null,
+      overallPoints: fantasy?.overallPoints ?? null,
+      valueScore: calculateValueScore(bestLapTime, fantasy?.price ?? null),
+    });
+  }
+
+  return constructors.sort((a, b) => {
+    if (a.bestLapTime === null) return 1;
+    if (b.bestLapTime === null) return -1;
+    return a.bestLapTime - b.bestLapTime;
+  });
+}
+
+export function generateConstructorRecommendations(
+  constructors: ConstructorAnalysis[],
+  budget: number,
+): ConstructorSwapRecommendation[] {
+  const withData = constructors.filter(
+    (c) => c.bestLapTime !== null && c.price !== null,
+  );
+
+  const recommendations: ConstructorSwapRecommendation[] = [];
+
+  for (const out of withData) {
+    for (const into of withData) {
+      if (out.name === into.name) continue;
+
+      const priceDelta = into.price! - out.price!;
+
+      if (into.bestLapTime! >= out.bestLapTime!) continue;
+      if (priceDelta > budget) continue;
+
+      const timeDelta = out.bestLapTime! - into.bestLapTime!;
+      const valueScoreDelta = (into.valueScore ?? 0) - (out.valueScore ?? 0);
+
+      let reason: string;
+      if (priceDelta <= 0) {
+        reason = `${into.name} is ${timeDelta.toFixed(3)}s faster and ${Math.abs(priceDelta).toFixed(1)}M cheaper`;
+      } else if (priceDelta <= 0.5) {
+        reason = `${into.name} is ${timeDelta.toFixed(3)}s faster at similar price (+${priceDelta.toFixed(1)}M)`;
+      } else {
+        reason = `${into.name} is ${timeDelta.toFixed(3)}s faster for +${priceDelta.toFixed(1)}M`;
+      }
+
+      recommendations.push({
+        constructorOut: out,
+        constructorIn: into,
+        timeDelta,
+        priceDelta,
+        valueScoreDelta,
+        reason,
+      });
+    }
+  }
+
   return recommendations.sort((a, b) => {
     if (Math.abs(a.timeDelta - b.timeDelta) > 0.01) return b.timeDelta - a.timeDelta;
     return b.valueScoreDelta - a.valueScoreDelta;

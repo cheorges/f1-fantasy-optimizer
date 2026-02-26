@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { analyzeDrivers, generateRecommendations } from "@/lib/analyzer";
+import { analyzeDrivers, generateRecommendations, analyzeConstructors, generateConstructorRecommendations } from "@/lib/analyzer";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -13,7 +13,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
     const recommendations = generateRecommendations(drivers, budget);
 
-    return NextResponse.json({ budget, recommendations });
+    const constructors = await analyzeConstructors(drivers);
+    const constructorRecommendations = generateConstructorRecommendations(constructors, budget);
+
+    return NextResponse.json({ budget, recommendations, constructorRecommendations });
   } catch (error) {
     return NextResponse.json(
       { error: `Failed to generate recommendations: ${String(error)}` },

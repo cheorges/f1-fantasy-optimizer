@@ -121,3 +121,25 @@ export interface SwapRecommendation {
   valueScoreDelta: number;
   reason: string;
 }
+
+export interface ConstructorAnalysis {
+  name: string;
+  teamColour: string;
+  bestLapTime: number | null;
+  avgLapTime: number | null;
+  drivers: string[];
+  price: number | null;
+  priceChange: number | null;
+  selectedPercentage: number | null;
+  overallPoints: number | null;
+  valueScore: number | null;
+}
+
+export interface ConstructorSwapRecommendation {
+  constructorOut: ConstructorAnalysis;
+  constructorIn: ConstructorAnalysis;
+  timeDelta: number;
+  priceDelta: number;
+  valueScoreDelta: number;
+  reason: string;
+}

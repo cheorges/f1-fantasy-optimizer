@@ -129,3 +129,15 @@ export async function getDriverPrices(): Promise<Map<string, FantasyDriver>> {
 
   return priceMap;
 }
+
+export async function getConstructorPrices(): Promise<Map<string, FantasyConstructor>> {
+  const data = await getFantasyData();
+  const priceMap = new Map<string, FantasyConstructor>();
+
+  for (const constructor of data.constructors) {
+    // Map by normalized name for matching with OpenF1 team names
+    priceMap.set(constructor.name.toUpperCase(), constructor);
+  }
+
+  return priceMap;
+}

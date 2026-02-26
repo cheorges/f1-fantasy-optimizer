@@ -6,6 +6,7 @@ import type {
   Meeting,
   DriverAnalysis,
   SwapRecommendation,
+  ConstructorSwapRecommendation,
   FantasyDriver,
   FantasyConstructor,
 } from "@/lib/types";
@@ -13,6 +14,7 @@ import SessionSelector from "@/components/SessionSelector";
 import DriverTable from "@/components/DriverTable";
 import BudgetInput from "@/components/BudgetInput";
 import RecommendationCard from "@/components/RecommendationCard";
+import ConstructorRecommendationCard from "@/components/ConstructorRecommendationCard";
 import PriceTable from "@/components/PriceTable";
 
 type ActiveTab = "performance" | "prices";
@@ -29,6 +31,7 @@ interface DriversResponse {
 interface RecommendationsResponse {
   budget: number;
   recommendations: SwapRecommendation[];
+  constructorRecommendations: ConstructorSwapRecommendation[];
 }
 
 interface PricesResponse {
@@ -44,6 +47,7 @@ export default function Home() {
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
   const [drivers, setDrivers] = useState<DriverAnalysis[]>([]);
   const [recommendations, setRecommendations] = useState<SwapRecommendation[]>([]);
+  const [constructorRecs, setConstructorRecs] = useState<ConstructorSwapRecommendation[]>([]);
   const [budget, setBudget] = useState(0);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
@@ -103,6 +107,7 @@ export default function Home() {
       if (!res.ok) throw new Error("Failed to load recommendations");
       const data: RecommendationsResponse = await res.json();
       setRecommendations(data.recommendations);
+      setConstructorRecs(data.constructorRecommendations);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -271,6 +276,40 @@ export default function Home() {
                             Showing top 20 of {recommendations.length} recommendations
                           </p>
                         )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Constructor Recommendations */}
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-zinc-800">
+                    <h2 className="font-semibold text-zinc-200">
+                      Constructor Swap Recommendations
+                    </h2>
+                  </div>
+
+                  <div className="p-3 sm:p-4">
+                    {loadingRecs ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-600 border-t-transparent" />
+                        <span className="ml-3 text-zinc-400 text-sm">Calculating...</span>
+                      </div>
+                    ) : constructorRecs.length === 0 ? (
+                      <div className="text-center py-8 text-zinc-500 text-sm">
+                        {drivers.length === 0
+                          ? "Select a practice session to see recommendations"
+                          : "No constructor swap recommendations for this budget."}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {constructorRecs.slice(0, 10).map((rec, i) => (
+                          <ConstructorRecommendationCard
+                            key={`${rec.constructorOut.name}-${rec.constructorIn.name}`}
+                            recommendation={rec}
+                            index={i}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
