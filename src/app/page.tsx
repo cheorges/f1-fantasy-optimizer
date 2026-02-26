@@ -335,6 +335,10 @@ export default function Home() {
           />
         )}
       </main>
+
+      <footer className="max-w-7xl mx-auto px-3 sm:px-4 py-4 text-center text-xs text-zinc-600">
+        v{process.env.APP_VERSION}
+      </footer>
     </div>
   );
 }
