@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLatestMeeting, getPracticeSessions } from "@/lib/openf1";
+import { getLatestMeeting, getPracticeSessions, OpenF1LiveSessionError } from "@/lib/openf1";
 import { MOCK_MEETING, MOCK_SESSIONS } from "@/lib/mock-data";
 
 export async function GET(): Promise<NextResponse> {
@@ -20,6 +20,12 @@ export async function GET(): Promise<NextResponse> {
       sessions,
     });
   } catch (error) {
+    if (error instanceof OpenF1LiveSessionError) {
+      return NextResponse.json(
+        { error: error.message, code: "LIVE_SESSION" },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { error: `Failed to fetch sessions: ${String(error)}` },
       { status: 500 },

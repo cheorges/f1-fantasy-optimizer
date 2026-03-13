@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { analyzeDrivers } from "@/lib/analyzer";
+import { OpenF1LiveSessionError } from "@/lib/openf1";
 import { getMockDrivers } from "@/lib/mock-data";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -17,6 +18,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ drivers });
   } catch (error) {
+    if (error instanceof OpenF1LiveSessionError) {
+      return NextResponse.json(
+        { error: error.message, code: "LIVE_SESSION" },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { error: `Failed to analyze drivers: ${String(error)}` },
       { status: 500 },

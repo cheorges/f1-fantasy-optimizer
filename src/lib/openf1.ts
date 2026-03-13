@@ -4,6 +4,13 @@ import type { Session, Lap, Driver, DriverPerformance, Meeting } from "./types";
 const BASE_URL = "https://api.openf1.org/v1";
 const CACHE_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
+export class OpenF1LiveSessionError extends Error {
+  constructor() {
+    super("Live session in progress — data unavailable during session");
+    this.name = "OpenF1LiveSessionError";
+  }
+}
+
 async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
   for (let i = 0; i < retries; i++) {
     const response = await fetch(url);
@@ -20,6 +27,9 @@ async function fetchJson<T>(path: string, params: Record<string, string> = {}): 
   }
 
   const response = await fetchWithRetry(url.toString());
+  if (response.status === 401) {
+    throw new OpenF1LiveSessionError();
+  }
   if (!response.ok) {
     throw new Error(`OpenF1 API error: ${response.status} ${response.statusText} for ${path}`);
   }

@@ -191,14 +191,14 @@ export async function analyzeConstructors(
       priceChange: fantasy?.priceChange ?? null,
       selectedPercentage: fantasy?.selectedPercentage ?? null,
       overallPoints: fantasy?.overallPoints ?? null,
-      valueScore: calculateValueScore(bestLapTime, fantasy?.price ?? null),
+      valueScore: calculateValueScore(avgLapTime, fantasy?.price ?? null),
     });
   }
 
   return constructors.sort((a, b) => {
-    if (a.bestLapTime === null) return 1;
-    if (b.bestLapTime === null) return -1;
-    return a.bestLapTime - b.bestLapTime;
+    if (a.avgLapTime === null) return 1;
+    if (b.avgLapTime === null) return -1;
+    return a.avgLapTime - b.avgLapTime;
   });
 }
 
@@ -207,7 +207,7 @@ export function generateConstructorRecommendations(
   budget: number,
 ): ConstructorSwapRecommendation[] {
   const withData = constructors.filter(
-    (c) => c.bestLapTime !== null && c.price !== null,
+    (c) => c.avgLapTime !== null && c.price !== null,
   );
 
   const recommendations: ConstructorSwapRecommendation[] = [];
@@ -218,10 +218,10 @@ export function generateConstructorRecommendations(
 
       const priceDelta = into.price! - out.price!;
 
-      if (into.bestLapTime! >= out.bestLapTime!) continue;
+      if (into.avgLapTime! >= out.avgLapTime!) continue;
       if (priceDelta > budget) continue;
 
-      const timeDelta = out.bestLapTime! - into.bestLapTime!;
+      const timeDelta = out.avgLapTime! - into.avgLapTime!;
       const valueScoreDelta = (into.valueScore ?? 0) - (out.valueScore ?? 0);
 
       let reason: string;
