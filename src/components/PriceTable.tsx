@@ -326,9 +326,12 @@ export default function PriceTable({ drivers, constructors, round, loading }: Pr
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
+      <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3 flex items-center justify-between">
+        <span className="text-sm font-semibold text-zinc-200">Fantasy Prices</span>
+        <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">Round {round}</span>
+      </div>
       <DriverPriceSection drivers={drivers} />
       <ConstructorPriceSection constructors={constructors} />
-      <p className="text-center text-xs text-zinc-600">Round {round}</p>
     </div>
   );
 }

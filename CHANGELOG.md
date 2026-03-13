@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-03-13
+
+### Added
+
+- Prominent round indicator at the top of the Prices tab
+- Collapsible sections for all data panels (Driver Table, Swap Recs, Prices)
+- Column visibility toggle for Driver Table (S1/S2/S3, Top Speed, Price, Laps)
+- Pagination for driver and constructor swap recommendations (10 per page)
+- Driver filter on swap recommendations (filter by driverOut)
+- Live-session handling with toast notification when OpenF1 returns 401
+
+### Changed
+
+- Constructor performance now uses average of both drivers instead of best driver only
+
 ## [0.1.0] - 2026-02-26
 
 ### Added
