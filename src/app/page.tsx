@@ -16,9 +16,10 @@ import BudgetInput from "@/components/BudgetInput";
 import RecommendationCard from "@/components/RecommendationCard";
 import ConstructorRecommendationCard from "@/components/ConstructorRecommendationCard";
 import PriceTable from "@/components/PriceTable";
+import TeamTab from "@/components/TeamTab";
 import InfoTooltip from "@/components/InfoTooltip";
 
-type ActiveTab = "performance" | "prices";
+type ActiveTab = "performance" | "team" | "prices";
 
 interface SessionsResponse {
   meeting: Meeting;
@@ -156,7 +157,7 @@ export default function Home() {
 
   // Lazy fetch prices when tab is first activated
   useEffect(() => {
-    if (activeTab !== "prices" || pricesFetched) return;
+    if ((activeTab !== "prices" && activeTab !== "team") || pricesFetched) return;
 
     async function fetchPrices() {
       setLoadingPrices(true);
@@ -286,6 +287,18 @@ export default function Home() {
             }`}
           >
             Performance
+          </button>
+          <button
+            onClick={() => setActiveTab("team")}
+            aria-selected={activeTab === "team"}
+            role="tab"
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "team"
+                ? "border-red-500 text-white"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Team
           </button>
           <button
             onClick={() => setActiveTab("prices")}
@@ -536,6 +549,15 @@ export default function Home() {
               </>
             )}
           </>
+        )}
+
+        {activeTab === "team" && (
+          <TeamTab
+            drivers={priceDrivers}
+            constructors={priceConstructors}
+            round={priceRound}
+            loading={loadingPrices}
+          />
         )}
 
         {activeTab === "prices" && (

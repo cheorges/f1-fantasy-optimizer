@@ -143,3 +143,16 @@ export interface ConstructorSwapRecommendation {
   valueScoreDelta: number;
   reason: string;
 }
+
+export interface FantasyTeam {
+  driverIds: number[];
+  constructorIds: number[];
+}
+
+export interface PointsSwapSuggestion {
+  type: "driver" | "constructor";
+  current: { id: number; name: string; teamName: string; price: number; overallPoints: number };
+  upgrade: { id: number; name: string; teamName: string; price: number; overallPoints: number };
+  pointsDelta: number;
+  priceDelta: number;
+}
