@@ -19,7 +19,7 @@ import PriceTable from "@/components/PriceTable";
 import TeamTab from "@/components/TeamTab";
 import InfoTooltip from "@/components/InfoTooltip";
 
-type ActiveTab = "performance" | "team" | "prices";
+type ActiveTab = "training" | "team" | "prices";
 
 interface SessionsResponse {
   meeting: Meeting;
@@ -43,7 +43,7 @@ interface PricesResponse {
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("performance");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("training");
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
@@ -157,7 +157,7 @@ export default function Home() {
 
   // Lazy fetch prices when tab is first activated
   useEffect(() => {
-    if ((activeTab !== "prices" && activeTab !== "team") || pricesFetched) return;
+    if (pricesFetched) return;
 
     async function fetchPrices() {
       setLoadingPrices(true);
@@ -263,30 +263,22 @@ export default function Home() {
                 </p>
               )}
             </div>
-            {activeTab === "performance" && !loadingSessions && (
-              <SessionSelector
-                sessions={sessions}
-                selectedKey={selectedSession}
-                onSelect={handleSessionSelect}
-                loading={isLoading}
-              />
-            )}
           </div>
         </div>
 
         {/* Tab Navigation */}
         <div className="max-w-7xl mx-auto px-3 sm:px-4 flex gap-0">
           <button
-            onClick={() => setActiveTab("performance")}
-            aria-selected={activeTab === "performance"}
+            onClick={() => setActiveTab("training")}
+            aria-selected={activeTab === "training"}
             role="tab"
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "performance"
+              activeTab === "training"
                 ? "border-red-500 text-white"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            Performance
+            Training
           </button>
           <button
             onClick={() => setActiveTab("team")}
@@ -328,7 +320,7 @@ export default function Home() {
           </div>
         )}
 
-        {activeTab === "performance" && (
+        {activeTab === "training" && (
           <>
             {loadingSessions ? (
               <div className="flex items-center justify-center py-16">
@@ -337,6 +329,22 @@ export default function Home() {
               </div>
             ) : (
               <>
+                {/* Training Header */}
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-zinc-200">Training Performance</span>
+                    {meeting && (
+                      <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">Round {priceRound || meeting.meeting_key}</span>
+                    )}
+                  </div>
+                  <SessionSelector
+                    sessions={sessions}
+                    selectedKey={selectedSession}
+                    onSelect={handleSessionSelect}
+                    loading={isLoading}
+                  />
+                </div>
+
                 {/* Driver Table */}
                 <div className="bg-zinc-900 rounded-xl border border-zinc-800">
                   <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between gap-3">
