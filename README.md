@@ -2,6 +2,8 @@
 
 Web app that combines F1 practice session data (FP1/FP2/FP3) with F1 Fantasy prices to provide swap recommendations for your fantasy team.
 
+**Demo:** [https://f1.cheorges.ch/](https://f1.cheorges.ch/)
+
 ## Getting Started
 
 ### Development
