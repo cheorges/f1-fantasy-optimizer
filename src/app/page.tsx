@@ -316,7 +316,8 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         {error && (
           <div className="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300">
-            {error}
+            <p>{error}</p>
+            <p className="mt-2 text-xs text-red-400">This app uses the free tier of the F1 APIs which have rate limits. Please reload the page and try again.</p>
           </div>
         )}
 
