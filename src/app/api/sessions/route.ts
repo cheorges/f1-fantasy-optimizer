@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getLatestMeeting, getPracticeSessions, OpenF1LiveSessionError } from "@/lib/openf1";
 import { MOCK_MEETING, MOCK_SESSIONS } from "@/lib/mock-data";
+import { USE_MOCK_DATA } from "@/lib/config";
 
 export async function GET(): Promise<NextResponse> {
-  if (process.env.USE_MOCK_DATA === "true") {
+  if (USE_MOCK_DATA) {
     return NextResponse.json({ meeting: MOCK_MEETING, sessions: MOCK_SESSIONS });
   }
 

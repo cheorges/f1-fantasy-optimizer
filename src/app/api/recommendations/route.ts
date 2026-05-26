@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { analyzeDrivers, generateRecommendations, analyzeConstructors, generateConstructorRecommendations } from "@/lib/analyzer";
 import { OpenF1LiveSessionError } from "@/lib/openf1";
 import { getMockRecommendations } from "@/lib/mock-data";
+import { USE_MOCK_DATA } from "@/lib/config";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const budgetParam = request.nextUrl.searchParams.get("budget");
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid budget" }, { status: 400 });
   }
 
-  if (process.env.USE_MOCK_DATA === "true") {
+  if (USE_MOCK_DATA) {
     return NextResponse.json(getMockRecommendations(budget));
   }
 

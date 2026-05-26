@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getFantasyData } from "@/lib/fantasy";
 import { MOCK_PRICES } from "@/lib/mock-data";
+import { USE_MOCK_DATA } from "@/lib/config";
 
 export async function GET(): Promise<NextResponse> {
-  if (process.env.USE_MOCK_DATA === "true") {
+  if (USE_MOCK_DATA) {
     return NextResponse.json(MOCK_PRICES);
   }
 
