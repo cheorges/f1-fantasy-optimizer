@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { DriverAnalysis } from "@/lib/types";
 
 type SortField = "position" | "bestLapTime" | "price" | "valueScore" | "topSpeed";
@@ -11,7 +11,6 @@ interface DriverTableProps {
   drivers: DriverAnalysis[];
   loading: boolean;
   visibleColumns: Set<DriverColumn>;
-  onToggleColumn: (col: DriverColumn) => void;
 }
 
 export const COLUMN_OPTIONS: { key: DriverColumn; label: string }[] = [
@@ -68,7 +67,7 @@ const SORT_OPTIONS: { field: SortField; label: string }[] = [
   { field: "topSpeed", label: "Top Speed" },
 ];
 
-export default function DriverTable({ drivers, loading, visibleColumns, onToggleColumn }: DriverTableProps) {
+export default function DriverTable({ drivers, loading, visibleColumns }: DriverTableProps) {
   const [sortField, setSortField] = useState<SortField>("bestLapTime");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
@@ -83,34 +82,36 @@ export default function DriverTable({ drivers, loading, visibleColumns, onToggle
 
   const show = (col: DriverColumn) => visibleColumns.has(col);
 
-  const sorted = [...drivers].sort((a, b) => {
-    const dir = sortDirection === "asc" ? 1 : -1;
+  const sorted = useMemo(() => {
+    return [...drivers].sort((a, b) => {
+      const dir = sortDirection === "asc" ? 1 : -1;
 
-    switch (sortField) {
-      case "position":
-        return 0;
-      case "bestLapTime": {
-        if (a.bestLapTime === null) return 1;
-        if (b.bestLapTime === null) return -1;
-        return (a.bestLapTime - b.bestLapTime) * dir;
+      switch (sortField) {
+        case "position":
+          return 0;
+        case "bestLapTime": {
+          if (a.bestLapTime === null) return 1;
+          if (b.bestLapTime === null) return -1;
+          return (a.bestLapTime - b.bestLapTime) * dir;
+        }
+        case "price": {
+          if (a.price === null) return 1;
+          if (b.price === null) return -1;
+          return (a.price - b.price) * dir;
+        }
+        case "valueScore": {
+          if (a.valueScore === null) return 1;
+          if (b.valueScore === null) return -1;
+          return (a.valueScore - b.valueScore) * dir;
+        }
+        case "topSpeed": {
+          if (a.topSpeed === null) return 1;
+          if (b.topSpeed === null) return -1;
+          return (a.topSpeed - b.topSpeed) * dir;
+        }
       }
-      case "price": {
-        if (a.price === null) return 1;
-        if (b.price === null) return -1;
-        return (a.price - b.price) * dir;
-      }
-      case "valueScore": {
-        if (a.valueScore === null) return 1;
-        if (b.valueScore === null) return -1;
-        return (a.valueScore - b.valueScore) * dir;
-      }
-      case "topSpeed": {
-        if (a.topSpeed === null) return 1;
-        if (b.topSpeed === null) return -1;
-        return (a.topSpeed - b.topSpeed) * dir;
-      }
-    }
-  });
+    });
+  }, [drivers, sortField, sortDirection]);
 
   const allValueScores = drivers.map((d) => d.valueScore);
   const sortIndicator = (field: SortField) => {

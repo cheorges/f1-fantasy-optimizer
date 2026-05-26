@@ -39,7 +39,7 @@ function ConstructorRecommendationCard({
           </div>
 
           {/* Arrow */}
-          <div className="text-zinc-500 shrink-0 px-1">&rarr;</div>
+          <div className="text-zinc-500 shrink-0 px-1">→</div>
 
           {/* Constructor In */}
           <div className="flex items-center gap-2 min-w-0">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { FantasyDriver, FantasyConstructor, PointsSwapSuggestion } from "@/lib/types";
 import { loadTeam, saveTeam, getTeamSuggestions } from "@/lib/team-optimizer";
 import InfoTooltip from "@/components/InfoTooltip";
@@ -29,22 +29,31 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
   const [suggestionPage, setSuggestionPage] = useState(0);
 
-  // Load team from localStorage on mount
+  const restoredFromStorage = useRef(false);
+
+  // Restore the saved team once the fantasy data is available to validate IDs against.
+  // localStorage is read in an effect (not lazy state init) to avoid SSR hydration
+  // mismatch, and guarded so a later data refresh can't clobber the user's edits.
   useEffect(() => {
+    if (restoredFromStorage.current) return;
+    if (drivers.length === 0 && constructors.length === 0) return;
+
     const saved = loadTeam();
+    restoredFromStorage.current = true;
     if (!saved) return;
 
     const validDriverIds = saved.driverIds.filter((id) => drivers.some((d) => d.id === id));
     const validConstructorIds = saved.constructorIds.filter((id) => constructors.some((c) => c.id === id));
 
-    const paddedDrivers: (number | null)[] = [...validDriverIds];
-    while (paddedDrivers.length < DRIVER_SLOTS) paddedDrivers.push(null);
+    const padded = (ids: number[], slots: number): (number | null)[] => {
+      const next: (number | null)[] = [...ids];
+      while (next.length < slots) next.push(null);
+      return next.slice(0, slots);
+    };
 
-    const paddedConstructors: (number | null)[] = [...validConstructorIds];
-    while (paddedConstructors.length < CONSTRUCTOR_SLOTS) paddedConstructors.push(null);
-
-    setDriverIds(paddedDrivers.slice(0, DRIVER_SLOTS));
-    setConstructorIds(paddedConstructors.slice(0, CONSTRUCTOR_SLOTS));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration-safe restore
+    setDriverIds(padded(validDriverIds, DRIVER_SLOTS));
+    setConstructorIds(padded(validConstructorIds, CONSTRUCTOR_SLOTS));
   }, [drivers, constructors]);
 
   // Save team to localStorage on change
@@ -338,7 +347,7 @@ function SuggestionCard({ suggestion, index }: { suggestion: PointsSwapSuggestio
             <div className="text-xs text-zinc-500 truncate">{current.teamName}</div>
           </div>
 
-          <div className="text-zinc-500 shrink-0 px-1">&rarr;</div>
+          <div className="text-zinc-500 shrink-0 px-1">→</div>
 
           {/* Upgrade */}
           <div className="min-w-0">

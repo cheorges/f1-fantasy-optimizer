@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { FantasyDriver, FantasyConstructor } from "@/lib/types";
 import InfoTooltip from "@/components/InfoTooltip";
 
@@ -36,10 +36,10 @@ function useSortable<T>(
   defaultField: keyof T & string,
   defaultDir: SortDirection = "desc",
 ) {
-  const [sortField, setSortField] = useState<string>(defaultField);
+  const [sortField, setSortField] = useState<keyof T & string>(defaultField);
   const [sortDirection, setSortDirection] = useState<SortDirection>(defaultDir);
 
-  function handleSort(field: string) {
+  function handleSort(field: keyof T & string) {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
@@ -48,14 +48,17 @@ function useSortable<T>(
     }
   }
 
-  const sorted = [...items].sort((a, b) => {
-    const dir = sortDirection === "asc" ? 1 : -1;
-    const aVal = (a as Record<string, unknown>)[sortField] as number;
-    const bVal = (b as Record<string, unknown>)[sortField] as number;
-    return (aVal - bVal) * dir;
-  });
+  const sorted = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const dir = sortDirection === "asc" ? 1 : -1;
+      const aVal = a[sortField];
+      const bVal = b[sortField];
+      if (typeof aVal === "number" && typeof bVal === "number") return (aVal - bVal) * dir;
+      return 0;
+    });
+  }, [items, sortField, sortDirection]);
 
-  const indicator = (field: string) => {
+  const indicator = (field: keyof T & string) => {
     if (sortField !== field) return "";
     return sortDirection === "asc" ? " \u2191" : " \u2193";
   };
