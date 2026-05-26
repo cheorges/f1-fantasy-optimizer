@@ -1,31 +1,21 @@
 import { getDriverPerformances, getPracticeSessions, getLatestMeeting } from "./openf1";
 import { getDriverPrices, getConstructorPrices } from "./fantasy";
+import { canonicalTeam } from "./team-names";
 import type {
   DriverAnalysis,
   DriverPerformance,
   FantasyDriver,
   FantasyConstructor,
-  SwapRecommendation,
   ConstructorAnalysis,
-  ConstructorSwapRecommendation,
 } from "./types";
+
+export { generateRecommendations, generateConstructorRecommendations } from "./swaps";
 
 function matchFantasyDriver(
   performance: DriverPerformance,
   priceMap: Map<string, FantasyDriver>,
 ): FantasyDriver | null {
-  // Match by last name (uppercase)
-  const byLastName = priceMap.get(performance.driver.last_name.toUpperCase());
-  if (byLastName) return byLastName;
-
-  // Fallback: match by acronym/TLA in fantasy driver names
-  for (const [, fd] of priceMap) {
-    if (fd.lastName.toUpperCase() === performance.driver.last_name.toUpperCase()) {
-      return fd;
-    }
-  }
-
-  return null;
+  return priceMap.get(performance.driver.name_acronym.toUpperCase()) ?? null;
 }
 
 function calculateValueScore(lapTime: number | null, price: number | null): number | null {
@@ -91,66 +81,11 @@ export async function analyzeDrivers(sessionKey?: number): Promise<DriverAnalysi
     });
 }
 
-export function generateRecommendations(
-  drivers: DriverAnalysis[],
-  budget: number,
-): SwapRecommendation[] {
-  const driversWithData = drivers.filter(
-    (d) => d.bestLapTime !== null && d.price !== null,
-  );
-
-  const recommendations: SwapRecommendation[] = [];
-
-  for (const driverOut of driversWithData) {
-    for (const driverIn of driversWithData) {
-      if (driverOut.driverNumber === driverIn.driverNumber) continue;
-
-      const priceDelta = driverIn.price! - driverOut.price!;
-
-      // driverIn must be faster (lower lap time)
-      if (driverIn.bestLapTime! >= driverOut.bestLapTime!) continue;
-
-      // Price difference must be within budget
-      // Positive priceDelta = driverIn is more expensive, needs budget
-      // Negative priceDelta = driverIn is cheaper, always possible
-      if (priceDelta > budget) continue;
-
-      const timeDelta = driverOut.bestLapTime! - driverIn.bestLapTime!;
-      const valueScoreDelta = (driverIn.valueScore ?? 0) - (driverOut.valueScore ?? 0);
-
-      let reason: string;
-      if (priceDelta <= 0) {
-        reason = `${driverIn.nameAcronym} is ${timeDelta.toFixed(3)}s faster and ${Math.abs(priceDelta).toFixed(1)}M cheaper`;
-      } else if (priceDelta <= 0.5) {
-        reason = `${driverIn.nameAcronym} is ${timeDelta.toFixed(3)}s faster at similar price (+${priceDelta.toFixed(1)}M)`;
-      } else {
-        reason = `${driverIn.nameAcronym} is ${timeDelta.toFixed(3)}s faster for +${priceDelta.toFixed(1)}M`;
-      }
-
-      recommendations.push({
-        driverOut,
-        driverIn,
-        timeDelta,
-        priceDelta,
-        valueScoreDelta,
-        reason,
-      });
-    }
-  }
-
-  // Sort: best time improvement first, then best value improvement
-  return recommendations.sort((a, b) => {
-    if (Math.abs(a.timeDelta - b.timeDelta) > 0.01) return b.timeDelta - a.timeDelta;
-    return b.valueScoreDelta - a.valueScoreDelta;
-  });
-}
-
 function matchFantasyConstructor(
   teamName: string,
   priceMap: Map<string, FantasyConstructor>,
 ): FantasyConstructor | null {
-  const upperTeam = teamName.toUpperCase();
-  return priceMap.get(upperTeam) ?? null;
+  return priceMap.get(canonicalTeam(teamName)) ?? null;
 }
 
 export async function analyzeConstructors(
@@ -202,50 +137,4 @@ export async function analyzeConstructors(
   });
 }
 
-export function generateConstructorRecommendations(
-  constructors: ConstructorAnalysis[],
-  budget: number,
-): ConstructorSwapRecommendation[] {
-  const withData = constructors.filter(
-    (c) => c.avgLapTime !== null && c.price !== null,
-  );
-
-  const recommendations: ConstructorSwapRecommendation[] = [];
-
-  for (const out of withData) {
-    for (const into of withData) {
-      if (out.name === into.name) continue;
-
-      const priceDelta = into.price! - out.price!;
-
-      if (into.avgLapTime! >= out.avgLapTime!) continue;
-      if (priceDelta > budget) continue;
-
-      const timeDelta = out.avgLapTime! - into.avgLapTime!;
-      const valueScoreDelta = (into.valueScore ?? 0) - (out.valueScore ?? 0);
-
-      let reason: string;
-      if (priceDelta <= 0) {
-        reason = `${into.name} is ${timeDelta.toFixed(3)}s faster and ${Math.abs(priceDelta).toFixed(1)}M cheaper`;
-      } else if (priceDelta <= 0.5) {
-        reason = `${into.name} is ${timeDelta.toFixed(3)}s faster at similar price (+${priceDelta.toFixed(1)}M)`;
-      } else {
-        reason = `${into.name} is ${timeDelta.toFixed(3)}s faster for +${priceDelta.toFixed(1)}M`;
-      }
-
-      recommendations.push({
-        constructorOut: out,
-        constructorIn: into,
-        timeDelta,
-        priceDelta,
-        valueScoreDelta,
-        reason,
-      });
-    }
-  }
-
-  return recommendations.sort((a, b) => {
-    if (Math.abs(a.timeDelta - b.timeDelta) > 0.01) return b.timeDelta - a.timeDelta;
-    return b.valueScoreDelta - a.valueScoreDelta;
-  });
-}
+export { calculateValueScore };

@@ -1,4 +1,7 @@
+import { z } from "zod";
 import { getOrFetch } from "./cache";
+import { fetchWithRetry } from "./http";
+import { canonicalTeam } from "./team-names";
 import type { FantasyDriver, FantasyConstructor, FantasyData } from "./types";
 
 const FANTASY_FEED_URL = "https://fantasy.formula1.com/feeds/drivers";
@@ -6,51 +9,45 @@ const CURRENT_YEAR = new Date().getFullYear();
 const CALENDAR_URL = `https://api.jolpi.ca/ergast/f1/${CURRENT_YEAR}.json`;
 const CACHE_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
-async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
-  for (let i = 0; i < retries; i++) {
-    const response = await fetch(url);
-    if (response.ok || response.status < 500) return response;
-    if (i < retries - 1) await new Promise((r) => setTimeout(r, 1000 * 2 ** i));
-  }
-  return fetch(url);
-}
+// Field names mirror the upstream feed's actual (typo'd) keys. zod fails loudly if the
+// feed shape changes, instead of silently producing NaN downstream.
+const RawFantasyPlayerSchema = z
+  .object({
+    PlayerId: z.string(),
+    Skill: z.number(),
+    Value: z.number(),
+    FUllName: z.string(),
+    TeamName: z.string(),
+    IsActive: z.string(),
+    DriverTLA: z.string(),
+    OverallPpints: z.string(),
+    GamedayPoints: z.string(),
+    SelectedPercentage: z.string(),
+    OldPlayerValue: z.number(),
+    FirstName: z.string(),
+    LastName: z.string(),
+  })
+  .passthrough();
 
-interface RawFantasyPlayer {
-  PlayerId: string;
-  Skill: number;
-  PositionName: string;
-  Value: number;
-  TeamId: string;
-  FUllName: string;
-  DisplayName: string;
-  TeamName: string;
-  IsActive: string;
-  DriverTLA: string;
-  OverallPpints: string;
-  GamedayPoints: string;
-  SelectedPercentage: string;
-  OldPlayerValue: number;
-  FirstName: string;
-  LastName: string;
-}
+const RawFantasyResponseSchema = z.object({
+  Data: z.object({
+    Value: z.array(RawFantasyPlayerSchema),
+  }),
+});
 
-interface RawFantasyResponse {
-  Data: {
-    Value: RawFantasyPlayer[];
-  };
-}
+const ErgastResponseSchema = z.object({
+  MRData: z.object({
+    RaceTable: z.object({
+      Races: z.array(z.object({ round: z.string(), date: z.string() })),
+    }),
+  }),
+});
 
-interface ErgastRace {
-  round: string;
-  date: string;
-}
+type RawFantasyPlayer = z.infer<typeof RawFantasyPlayerSchema>;
 
-interface ErgastResponse {
-  MRData: {
-    RaceTable: {
-      Races: ErgastRace[];
-    };
-  };
+function toNumber(value: string): number {
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 async function getCurrentRound(): Promise<number> {
@@ -60,8 +57,10 @@ async function getCurrentRound(): Promise<number> {
       const response = await fetchWithRetry(CALENDAR_URL);
       if (!response.ok) return 1;
 
-      const data = (await response.json()) as ErgastResponse;
-      const races = data.MRData.RaceTable.Races;
+      const parsed = ErgastResponseSchema.safeParse(await response.json());
+      if (!parsed.success) return 1;
+
+      const races = parsed.data.MRData.RaceTable.Races;
       const now = new Date();
 
       // Find the next upcoming or most recent race
@@ -84,11 +83,12 @@ function parseDriver(raw: RawFantasyPlayer): FantasyDriver {
     id: parseInt(raw.PlayerId, 10),
     firstName: raw.FirstName,
     lastName: raw.LastName,
+    tla: raw.DriverTLA,
     teamName: raw.TeamName,
     price: raw.Value,
-    selectedPercentage: parseFloat(raw.SelectedPercentage),
-    overallPoints: parseFloat(raw.OverallPpints),
-    gamedayPoints: parseFloat(raw.GamedayPoints),
+    selectedPercentage: toNumber(raw.SelectedPercentage),
+    overallPoints: toNumber(raw.OverallPpints),
+    gamedayPoints: toNumber(raw.GamedayPoints),
     priceChange: raw.Value - raw.OldPlayerValue,
   };
 }
@@ -98,9 +98,9 @@ function parseConstructor(raw: RawFantasyPlayer): FantasyConstructor {
     id: parseInt(raw.PlayerId, 10),
     name: raw.FUllName,
     price: raw.Value,
-    selectedPercentage: parseFloat(raw.SelectedPercentage),
-    overallPoints: parseFloat(raw.OverallPpints),
-    gamedayPoints: parseFloat(raw.GamedayPoints),
+    selectedPercentage: toNumber(raw.SelectedPercentage),
+    overallPoints: toNumber(raw.OverallPpints),
+    gamedayPoints: toNumber(raw.GamedayPoints),
     priceChange: raw.Value - raw.OldPlayerValue,
   };
 }
@@ -116,9 +116,12 @@ export async function getFantasyData(): Promise<FantasyData> {
         throw new Error(`Fantasy API error: ${response.status} ${response.statusText}`);
       }
 
-      const data = (await response.json()) as RawFantasyResponse;
-      const players = data.Data.Value.filter((p) => p.IsActive === "1");
+      const parsed = RawFantasyResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        throw new Error(`Fantasy feed shape changed: ${parsed.error.issues[0]?.message ?? "unknown"}`);
+      }
 
+      const players = parsed.data.Data.Value.filter((p) => p.IsActive === "1");
       const drivers = players.filter((p) => p.Skill === 1).map(parseDriver);
       const constructors = players.filter((p) => p.Skill === 2).map(parseConstructor);
 
@@ -132,9 +135,10 @@ export async function getDriverPrices(): Promise<Map<string, FantasyDriver>> {
   const data = await getFantasyData();
   const priceMap = new Map<string, FantasyDriver>();
 
+  // Keyed by three-letter acronym (TLA) — ASCII and stable, unlike last names which
+  // diverge across feeds on diacritics (e.g. "Hülkenberg" vs "Hulkenberg").
   for (const driver of data.drivers) {
-    // Map by last name (used for matching with OpenF1 data)
-    priceMap.set(driver.lastName.toUpperCase(), driver);
+    priceMap.set(driver.tla.toUpperCase(), driver);
   }
 
   return priceMap;
@@ -145,8 +149,7 @@ export async function getConstructorPrices(): Promise<Map<string, FantasyConstru
   const priceMap = new Map<string, FantasyConstructor>();
 
   for (const constructor of data.constructors) {
-    // Map by normalized name for matching with OpenF1 team names
-    priceMap.set(constructor.name.toUpperCase(), constructor);
+    priceMap.set(canonicalTeam(constructor.name), constructor);
   }
 
   return priceMap;

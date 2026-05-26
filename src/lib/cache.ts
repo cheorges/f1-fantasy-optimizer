@@ -8,18 +8,23 @@ interface CacheEntry<T> {
 
 const store = new Map<string, CacheEntry<unknown>>();
 
-function evictOldest(): void {
-  let oldestKey: string | null = null;
-  let oldestTime = Infinity;
+// Evicts the entry closest to expiry (not true LRU — reads don't refresh recency).
+function evictSoonestToExpire(): void {
+  let soonestKey: string | null = null;
+  let soonestTime = Infinity;
 
   for (const [key, entry] of store) {
-    if (entry.expiresAt < oldestTime) {
-      oldestTime = entry.expiresAt;
-      oldestKey = key;
+    if (entry.expiresAt < soonestTime) {
+      soonestTime = entry.expiresAt;
+      soonestKey = key;
     }
   }
 
-  if (oldestKey) store.delete(oldestKey);
+  if (soonestKey) store.delete(soonestKey);
+}
+
+export function clearCache(): void {
+  store.clear();
 }
 
 export function getCached<T>(key: string): T | null {
@@ -36,7 +41,7 @@ export function getCached<T>(key: string): T | null {
 
 export function setCache<T>(key: string, data: T, ttlMs: number = DEFAULT_TTL_MS): void {
   if (store.size >= MAX_CACHE_ENTRIES && !store.has(key)) {
-    evictOldest();
+    evictSoonestToExpire();
   }
 
   store.set(key, {

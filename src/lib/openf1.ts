@@ -1,4 +1,6 @@
+import { z } from "zod";
 import { getOrFetch } from "./cache";
+import { fetchWithRetry } from "./http";
 import type { Session, Lap, Driver, DriverPerformance, Meeting } from "./types";
 
 const BASE_URL = "https://api.openf1.org/v1";
@@ -11,16 +13,69 @@ export class OpenF1LiveSessionError extends Error {
   }
 }
 
-async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
-  for (let i = 0; i < retries; i++) {
-    const response = await fetch(url);
-    if (response.ok || response.status < 500) return response;
-    if (i < retries - 1) await new Promise((r) => setTimeout(r, 1000 * 2 ** i));
-  }
-  return fetch(url);
-}
+const MeetingSchema = z
+  .object({
+    meeting_key: z.number(),
+    meeting_name: z.string(),
+    meeting_official_name: z.string(),
+    date_start: z.string(),
+    year: z.number(),
+    country_name: z.string(),
+    circuit_short_name: z.string(),
+  })
+  .passthrough();
 
-async function fetchJson<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+const SessionSchema = z
+  .object({
+    session_key: z.number(),
+    session_name: z.string(),
+    session_type: z.string(),
+    date_start: z.string(),
+    date_end: z.string(),
+    meeting_key: z.number(),
+    year: z.number(),
+    country_name: z.string(),
+    circuit_short_name: z.string(),
+  })
+  .passthrough();
+
+const LapSchema = z
+  .object({
+    session_key: z.number(),
+    driver_number: z.number(),
+    lap_number: z.number(),
+    lap_duration: z.number().nullable(),
+    duration_sector_1: z.number().nullable(),
+    duration_sector_2: z.number().nullable(),
+    duration_sector_3: z.number().nullable(),
+    i1_speed: z.number().nullable(),
+    i2_speed: z.number().nullable(),
+    st_speed: z.number().nullable(),
+    is_pit_out_lap: z.boolean(),
+    date_start: z.string(),
+  })
+  .passthrough();
+
+const DriverSchema = z
+  .object({
+    driver_number: z.number(),
+    first_name: z.string(),
+    last_name: z.string(),
+    full_name: z.string(),
+    name_acronym: z.string(),
+    team_name: z.string(),
+    team_colour: z.string(),
+    country_code: z.string(),
+    headshot_url: z.string().nullable(),
+    session_key: z.number(),
+  })
+  .passthrough();
+
+async function fetchJson<T>(
+  path: string,
+  params: Record<string, string>,
+  schema: z.ZodType<T>,
+): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
@@ -34,13 +89,17 @@ async function fetchJson<T>(path: string, params: Record<string, string> = {}): 
     throw new Error(`OpenF1 API error: ${response.status} ${response.statusText} for ${path}`);
   }
 
-  return response.json() as Promise<T>;
+  const parsed = schema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error(`OpenF1 ${path} shape changed: ${parsed.error.issues[0]?.message ?? "unknown"}`);
+  }
+  return parsed.data;
 }
 
 export async function getLatestMeeting(): Promise<Meeting | null> {
   const meetings = await getOrFetch(
     "meetings:latest",
-    () => fetchJson<Meeting[]>("/meetings", { year: String(new Date().getFullYear()) }),
+    () => fetchJson("/meetings", { year: String(new Date().getFullYear()) }, z.array(MeetingSchema)),
     CACHE_TTL_MS,
   );
 
@@ -56,9 +115,11 @@ export async function getPracticeSessions(meetingKey: number): Promise<Session[]
   return getOrFetch(
     `sessions:${meetingKey}`,
     async () => {
-      const sessions = await fetchJson<Session[]>("/sessions", {
-        meeting_key: String(meetingKey),
-      });
+      const sessions = await fetchJson(
+        "/sessions",
+        { meeting_key: String(meetingKey) },
+        z.array(SessionSchema),
+      );
       return sessions.filter((s) =>
         ["Practice 1", "Practice 2", "Practice 3"].includes(s.session_name),
       );
@@ -70,7 +131,7 @@ export async function getPracticeSessions(meetingKey: number): Promise<Session[]
 export async function getSessionLaps(sessionKey: number): Promise<Lap[]> {
   return getOrFetch(
     `laps:${sessionKey}`,
-    () => fetchJson<Lap[]>("/laps", { session_key: String(sessionKey) }),
+    () => fetchJson("/laps", { session_key: String(sessionKey) }, z.array(LapSchema)),
     CACHE_TTL_MS,
   );
 }
@@ -78,7 +139,7 @@ export async function getSessionLaps(sessionKey: number): Promise<Lap[]> {
 export async function getSessionDrivers(sessionKey: number): Promise<Driver[]> {
   return getOrFetch(
     `drivers:${sessionKey}`,
-    () => fetchJson<Driver[]>("/drivers", { session_key: String(sessionKey) }),
+    () => fetchJson("/drivers", { session_key: String(sessionKey) }, z.array(DriverSchema)),
     CACHE_TTL_MS,
   );
 }
@@ -128,7 +189,7 @@ export async function getDriverPerformances(sessionKey: number): Promise<DriverP
 
   const session = await getOrFetch(
     `session-info:${sessionKey}`,
-    () => fetchJson<Session[]>("/sessions", { session_key: String(sessionKey) }),
+    () => fetchJson("/sessions", { session_key: String(sessionKey) }, z.array(SessionSchema)),
     CACHE_TTL_MS,
   );
   const sessionName = session[0]?.session_name ?? "Unknown";

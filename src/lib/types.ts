@@ -65,6 +65,7 @@ export interface FantasyDriver {
   id: number;
   firstName: string;
   lastName: string;
+  tla: string;
   teamName: string;
   price: number;
   selectedPercentage: number;

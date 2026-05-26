@@ -1,8 +1,7 @@
+import { generateRecommendations, generateConstructorRecommendations } from "./swaps";
 import type {
   DriverAnalysis,
-  SwapRecommendation,
   ConstructorAnalysis,
-  ConstructorSwapRecommendation,
   Meeting,
   Session,
   FantasyDriver,
@@ -154,39 +153,6 @@ const MOCK_DRIVERS: DriverAnalysis[] = [
   },
 ];
 
-function generateDriverSwaps(drivers: DriverAnalysis[], budget: number): SwapRecommendation[] {
-  const withData = drivers.filter((d) => d.bestLapTime !== null && d.price !== null);
-  const recs: SwapRecommendation[] = [];
-
-  for (const out of withData) {
-    for (const into of withData) {
-      if (out.driverNumber === into.driverNumber) continue;
-      const priceDelta = into.price! - out.price!;
-      if (into.bestLapTime! >= out.bestLapTime!) continue;
-      if (priceDelta > budget) continue;
-
-      const timeDelta = out.bestLapTime! - into.bestLapTime!;
-      const valueScoreDelta = (into.valueScore ?? 0) - (out.valueScore ?? 0);
-
-      let reason: string;
-      if (priceDelta <= 0) {
-        reason = `${into.nameAcronym} is ${timeDelta.toFixed(3)}s faster and ${Math.abs(priceDelta).toFixed(1)}M cheaper`;
-      } else if (priceDelta <= 0.5) {
-        reason = `${into.nameAcronym} is ${timeDelta.toFixed(3)}s faster at similar price (+${priceDelta.toFixed(1)}M)`;
-      } else {
-        reason = `${into.nameAcronym} is ${timeDelta.toFixed(3)}s faster for +${priceDelta.toFixed(1)}M`;
-      }
-
-      recs.push({ driverOut: out, driverIn: into, timeDelta, priceDelta, valueScoreDelta, reason });
-    }
-  }
-
-  return recs.sort((a, b) => {
-    if (Math.abs(a.timeDelta - b.timeDelta) > 0.01) return b.timeDelta - a.timeDelta;
-    return b.valueScoreDelta - a.valueScoreDelta;
-  });
-}
-
 const MOCK_CONSTRUCTORS: ConstructorAnalysis[] = [
   { name: "Red Bull Racing", teamColour: "3671C6", bestLapTime: 90.456, avgLapTime: 91.012, drivers: ["VER", "LAW"], price: 32.0, priceChange: 0.5, selectedPercentage: 55.2, overallPoints: 245, valueScore: 0.346 },
   { name: "McLaren", teamColour: "FF8000", bestLapTime: 90.612, avgLapTime: 90.907, drivers: ["NOR", "PIA"], price: 28.5, priceChange: 0.8, selectedPercentage: 47.8, overallPoints: 218, valueScore: 0.388 },
@@ -199,39 +165,6 @@ const MOCK_CONSTRUCTORS: ConstructorAnalysis[] = [
   { name: "Haas", teamColour: "B6BABD", bestLapTime: 92.012, avgLapTime: 92.151, drivers: ["OCO", "BEA"], price: 9.5, priceChange: 0.1, selectedPercentage: 7.9, overallPoints: 42, valueScore: 1.144 },
   { name: "Kick Sauber", teamColour: "52E252", bestLapTime: 92.123, avgLapTime: 92.345, drivers: ["HUL", "BOR"], price: 8.0, priceChange: -0.1, selectedPercentage: 5.6, overallPoints: 31, valueScore: 1.358 },
 ];
-
-function generateConstructorSwaps(constructors: ConstructorAnalysis[], budget: number): ConstructorSwapRecommendation[] {
-  const withData = constructors.filter((c) => c.bestLapTime !== null && c.price !== null);
-  const recs: ConstructorSwapRecommendation[] = [];
-
-  for (const out of withData) {
-    for (const into of withData) {
-      if (out.name === into.name) continue;
-      const priceDelta = into.price! - out.price!;
-      if (into.bestLapTime! >= out.bestLapTime!) continue;
-      if (priceDelta > budget) continue;
-
-      const timeDelta = out.bestLapTime! - into.bestLapTime!;
-      const valueScoreDelta = (into.valueScore ?? 0) - (out.valueScore ?? 0);
-
-      let reason: string;
-      if (priceDelta <= 0) {
-        reason = `${into.name} is ${timeDelta.toFixed(3)}s faster and ${Math.abs(priceDelta).toFixed(1)}M cheaper`;
-      } else if (priceDelta <= 0.5) {
-        reason = `${into.name} is ${timeDelta.toFixed(3)}s faster at similar price (+${priceDelta.toFixed(1)}M)`;
-      } else {
-        reason = `${into.name} is ${timeDelta.toFixed(3)}s faster for +${priceDelta.toFixed(1)}M`;
-      }
-
-      recs.push({ constructorOut: out, constructorIn: into, timeDelta, priceDelta, valueScoreDelta, reason });
-    }
-  }
-
-  return recs.sort((a, b) => {
-    if (Math.abs(a.timeDelta - b.timeDelta) > 0.01) return b.timeDelta - a.timeDelta;
-    return b.valueScoreDelta - a.valueScoreDelta;
-  });
-}
 
 export const MOCK_MEETING: Meeting = {
   meeting_key: 9999,
@@ -253,11 +186,15 @@ export function getMockDrivers(): DriverAnalysis[] {
   return MOCK_DRIVERS;
 }
 
+export function getMockConstructors(): ConstructorAnalysis[] {
+  return MOCK_CONSTRUCTORS;
+}
+
 export function getMockRecommendations(budget: number) {
   return {
     budget,
-    recommendations: generateDriverSwaps(MOCK_DRIVERS, budget),
-    constructorRecommendations: generateConstructorSwaps(MOCK_CONSTRUCTORS, budget),
+    recommendations: generateRecommendations(MOCK_DRIVERS, budget),
+    constructorRecommendations: generateConstructorRecommendations(MOCK_CONSTRUCTORS, budget),
   };
 }
 
@@ -267,6 +204,7 @@ export const MOCK_PRICES: { drivers: FantasyDriver[]; constructors: FantasyConst
     id: i + 1,
     firstName: d.firstName,
     lastName: d.lastName,
+    tla: d.nameAcronym,
     teamName: d.teamName,
     price: d.price!,
     selectedPercentage: d.selectedPercentage!,
