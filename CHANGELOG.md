@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Unit test suite (Vitest) for the recommendation engine, name matching, value score, and cache
+- Runtime validation of external feeds (OpenF1, F1 Fantasy, Ergast) with zod
+- Reusable `CollapsibleSection` and `Pagination` components
+
+### Changed
+
+- Unified the driver and constructor swap logic into a single shared module (previously duplicated four times)
+- Recommendations are now computed client-side, so changing the budget no longer triggers a refetch
+- `/api/drivers` now returns constructor analysis alongside drivers
+- Centralized the `USE_MOCK_DATA` flag into a single config module
+- Split the page into a `TrainingTab` component plus shared building blocks
+- Renamed the cache eviction to reflect its actual soonest-to-expire behavior (previously mislabeled as LRU)
+
+### Fixed
+
+- Mock mode now uses the same recommendation engine as production; constructor swaps were comparing best lap time instead of average, showing different results than the live app
+- Driver matching now uses the three-letter acronym instead of last name, fixing mismatches on names with diacritics (e.g. Hülkenberg)
+- Constructor matching reconciles sponsor-prefixed Fantasy names via a canonical alias map without falsely merging distinct teams
+- External feeds now fail loudly on a shape change instead of silently producing `NaN`
+- Retry logic no longer swallows the final failed attempt
+- Toast notification timer is cleared on unmount and no longer stacks
+- Training round indicator shows the actual round instead of the internal meeting key
+
 ## [0.2.0] - 2026-03-13
 
 ### Added
