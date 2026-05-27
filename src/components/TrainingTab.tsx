@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import type { Session, DriverAnalysis, ConstructorAnalysis } from "@/lib/types";
+import type { DriversResponse } from "@/lib/api-types";
 import { generateRecommendations, generateConstructorRecommendations } from "@/lib/swaps";
 import { getLiveSessionMessage } from "@/lib/live-session";
 import SessionSelector from "@/components/SessionSelector";
@@ -18,11 +19,6 @@ interface TrainingTabProps {
   priceRound: number;
   onError: (message: string | null) => void;
   onToast: (message: string) => void;
-}
-
-interface DriversResponse {
-  drivers: DriverAnalysis[];
-  constructors: ConstructorAnalysis[];
 }
 
 const PAGE_SIZE = 10;

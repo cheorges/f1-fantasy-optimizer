@@ -2,23 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Session, Meeting, FantasyDriver, FantasyConstructor } from "@/lib/types";
+import type { SessionsResponse, PricesResponse } from "@/lib/api-types";
 import { getLiveSessionMessage } from "@/lib/live-session";
 import TrainingTab from "@/components/TrainingTab";
 import PriceTable from "@/components/PriceTable";
 import TeamTab from "@/components/TeamTab";
 
 type ActiveTab = "training" | "team" | "prices";
-
-interface SessionsResponse {
-  meeting: Meeting;
-  sessions: Session[];
-}
-
-interface PricesResponse {
-  drivers: FantasyDriver[];
-  constructors: FantasyConstructor[];
-  round: number;
-}
 
 const TABS: { id: ActiveTab; label: string }[] = [
   { id: "training", label: "Training" },
@@ -65,6 +55,7 @@ export default function Home() {
         const data: SessionsResponse = await res.json();
         setMeeting(data.meeting);
         setSessions(data.sessions);
+        setError(null);
       } catch (err) {
         setError(String(err));
       } finally {
@@ -89,6 +80,7 @@ export default function Home() {
         setPriceDrivers(data.drivers);
         setPriceConstructors(data.constructors);
         setPriceRound(data.round);
+        setError(null);
       } catch (err) {
         setError(String(err));
       } finally {
