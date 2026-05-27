@@ -1,4 +1,3 @@
-import { generateRecommendations, generateConstructorRecommendations } from "./swaps";
 import type {
   DriverAnalysis,
   ConstructorAnalysis,
@@ -188,14 +187,6 @@ export function getMockDrivers(): DriverAnalysis[] {
 
 export function getMockConstructors(): ConstructorAnalysis[] {
   return MOCK_CONSTRUCTORS;
-}
-
-export function getMockRecommendations(budget: number) {
-  return {
-    budget,
-    recommendations: generateRecommendations(MOCK_DRIVERS, budget),
-    constructorRecommendations: generateConstructorRecommendations(MOCK_CONSTRUCTORS, budget),
-  };
 }
 
 export const MOCK_PRICES: { drivers: FantasyDriver[]; constructors: FantasyConstructor[]; round: number } = {

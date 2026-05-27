@@ -9,8 +9,6 @@ import type {
   ConstructorAnalysis,
 } from "./types";
 
-export { generateRecommendations, generateConstructorRecommendations } from "./swaps";
-
 function matchFantasyDriver(
   performance: DriverPerformance,
   priceMap: Map<string, FantasyDriver>,
@@ -88,6 +86,8 @@ function matchFantasyConstructor(
   return priceMap.get(canonicalTeam(teamName)) ?? null;
 }
 
+// Expects the output of analyzeDrivers for the same session: constructor lap times are
+// derived by grouping those already-analyzed drivers by team.
 export async function analyzeConstructors(
   drivers: DriverAnalysis[],
 ): Promise<ConstructorAnalysis[]> {
