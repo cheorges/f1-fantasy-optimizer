@@ -2,17 +2,11 @@
 
 import { memo } from "react";
 import type { SwapRecommendation } from "@/lib/types";
+import { formatLapTime, formatPrice } from "@/lib/format";
 
 interface RecommendationCardProps {
   recommendation: SwapRecommendation;
   index: number;
-}
-
-function formatTime(seconds: number | null): string {
-  if (seconds === null) return "-";
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toFixed(3).padStart(6, "0")}`;
 }
 
 function RecommendationCard({ recommendation, index }: RecommendationCardProps) {
@@ -78,10 +72,10 @@ function RecommendationCard({ recommendation, index }: RecommendationCardProps) 
       {/* Lap comparison */}
       <div className="mt-3 flex gap-3 sm:gap-6 flex-wrap text-xs text-zinc-500">
         <span>
-          {driverOut.nameAcronym}: {formatTime(driverOut.bestLapTime)} / ${driverOut.price?.toFixed(1)}M
+          {driverOut.nameAcronym}: {formatLapTime(driverOut.bestLapTime)} / {formatPrice(driverOut.price)}
         </span>
         <span>
-          {driverIn.nameAcronym}: {formatTime(driverIn.bestLapTime)} / ${driverIn.price?.toFixed(1)}M
+          {driverIn.nameAcronym}: {formatLapTime(driverIn.bestLapTime)} / {formatPrice(driverIn.price)}
         </span>
       </div>
     </div>

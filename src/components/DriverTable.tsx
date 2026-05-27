@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import type { DriverAnalysis } from "@/lib/types";
+import { formatLapTime, formatPrice, formatPriceChange } from "@/lib/format";
 
-type SortField = "position" | "bestLapTime" | "price" | "valueScore" | "topSpeed";
+type SortField = "bestLapTime" | "price" | "valueScore" | "topSpeed";
 type SortDirection = "asc" | "desc";
 export type DriverColumn = "sectors" | "topSpeed" | "price" | "laps";
 
@@ -20,27 +21,9 @@ export const COLUMN_OPTIONS: { key: DriverColumn; label: string }[] = [
   { key: "laps", label: "Laps" },
 ];
 
-function formatTime(seconds: number | null): string {
-  if (seconds === null) return "-";
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toFixed(3).padStart(6, "0")}`;
-}
-
 function formatSector(seconds: number | null): string {
   if (seconds === null) return "-";
   return seconds.toFixed(3);
-}
-
-function formatPrice(price: number | null): string {
-  if (price === null) return "-";
-  return `$${price.toFixed(1)}M`;
-}
-
-function formatPriceChange(change: number | null): string {
-  if (change === null || change === 0) return "";
-  const sign = change > 0 ? "+" : "";
-  return `${sign}${change.toFixed(1)}M`;
 }
 
 function getValueColor(valueScore: number | null, allScores: (number | null)[]): string {
@@ -87,8 +70,6 @@ export default function DriverTable({ drivers, loading, visibleColumns }: Driver
       const dir = sortDirection === "asc" ? 1 : -1;
 
       switch (sortField) {
-        case "position":
-          return 0;
         case "bestLapTime": {
           if (a.bestLapTime === null) return 1;
           if (b.bestLapTime === null) return -1;
@@ -181,7 +162,7 @@ export default function DriverTable({ drivers, loading, visibleColumns }: Driver
                 </div>
               </div>
               <div className="mt-1.5 ml-[34px] flex items-center justify-between gap-3 text-sm">
-                <span className="font-mono">{formatTime(driver.bestLapTime)}</span>
+                <span className="font-mono">{formatLapTime(driver.bestLapTime)}</span>
                 {show("price") && (
                   <span>
                     <span className="font-mono">{formatPrice(driver.price)}</span>
@@ -290,7 +271,7 @@ export default function DriverTable({ drivers, loading, visibleColumns }: Driver
                   </td>
                   <td className="py-3 px-2 text-zinc-400">{driver.teamName}</td>
                   <td className="py-3 px-2 font-mono">
-                    {formatTime(driver.bestLapTime)}
+                    {formatLapTime(driver.bestLapTime)}
                   </td>
                   {show("sectors") && (
                     <td className="py-3 px-2 font-mono text-zinc-400">

@@ -3,6 +3,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { FantasyDriver, FantasyConstructor, PointsSwapSuggestion } from "@/lib/types";
 import { loadTeam, saveTeam, getTeamSuggestions } from "@/lib/team-optimizer";
+import { formatPrice } from "@/lib/format";
+import CollapsibleSection from "@/components/CollapsibleSection";
+import Pagination from "@/components/Pagination";
+import { BUDGET_PRESETS } from "@/components/BudgetInput";
 import InfoTooltip from "@/components/InfoTooltip";
 
 interface TeamTabProps {
@@ -16,10 +20,6 @@ const DRIVER_SLOTS = 5;
 const CONSTRUCTOR_SLOTS = 2;
 const BUDGET_CAP = 100;
 const PAGE_SIZE = 10;
-
-function formatPrice(price: number): string {
-  return `$${price.toFixed(1)}M`;
-}
 
 export default function TeamTab({ drivers, constructors, round, loading }: TeamTabProps) {
   const [driverIds, setDriverIds] = useState<(number | null)[]>(Array(DRIVER_SLOTS).fill(null));
@@ -144,20 +144,18 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       {/* Round indicator */}
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3 flex items-center justify-between">
         <span className="text-sm font-semibold text-zinc-200">My Team</span>
-        <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">Round {round}</span>
+        {round > 0 && (
+          <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">Round {round}</span>
+        )}
       </div>
 
       {/* Team Selection */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800">
-        <div
-          className="px-3 sm:px-4 py-3 border-b border-zinc-800 flex items-center justify-between cursor-pointer select-none"
-          onClick={() => setTeamCollapsed((v) => !v)}
-        >
-          <div className="flex items-center">
-            <span className="text-zinc-500 mr-2 text-xs">{teamCollapsed ? "\u25B6" : "\u25BC"}</span>
-            <h2 className="font-semibold text-zinc-200">Team Selection</h2>
-            <InfoTooltip text="Select your 5 drivers and 2 constructors. The budget can exceed $100M for simulation purposes. Your team is saved automatically." />
-          </div>
+      <CollapsibleSection
+        title="Team Selection"
+        info="Select your 5 drivers and 2 constructors. The budget can exceed $100M for simulation purposes. Your team is saved automatically."
+        collapsed={teamCollapsed}
+        onToggle={() => setTeamCollapsed((v) => !v)}
+        headerRight={
           <div className="flex items-center gap-3">
             <span className={`text-sm font-mono font-semibold ${teamCost > BUDGET_CAP ? "text-amber-400" : "text-zinc-200"}`}>
               {formatPrice(teamCost)}
@@ -166,9 +164,8 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
               <span className="text-xs text-amber-400">over cap</span>
             )}
           </div>
-        </div>
-
-        {!teamCollapsed && (
+        }
+      >
           <div className="p-3 sm:p-4">
             {/* Drivers */}
             <div className="mb-4">
@@ -224,8 +221,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
               </div>
             </div>
           </div>
-        )}
-      </div>
+      </CollapsibleSection>
 
       {/* Remaining Budget */}
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
@@ -250,7 +246,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
             <span className="text-zinc-400 text-sm">M</span>
           </div>
           <div className="flex gap-1.5">
-            {[0, 1, 2.5, 5, 10].map((preset) => (
+            {BUDGET_PRESETS.map((preset) => (
               <button
                 key={preset}
                 onClick={() => { setRemainingBudget(preset); setSuggestionPage(0); }}
@@ -268,22 +264,17 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       </div>
 
       {/* Optimization Suggestions */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800">
-        <div
-          className="px-3 sm:px-4 py-3 border-b border-zinc-800 flex items-center justify-between cursor-pointer select-none"
-          onClick={() => setSuggestionsCollapsed((v) => !v)}
-        >
-          <div className="flex items-center">
-            <span className="text-zinc-500 mr-2 text-xs">{suggestionsCollapsed ? "\u25B6" : "\u25BC"}</span>
-            <h2 className="font-semibold text-zinc-200">Upgrade Suggestions</h2>
-            <InfoTooltip text="Shows which available drivers and constructors have more Fantasy points than your current team members and fit within your remaining budget. Sorted by biggest points improvement." />
-          </div>
-          {suggestions.length > 0 && (
+      <CollapsibleSection
+        title="Upgrade Suggestions"
+        info="Shows which available drivers and constructors have more Fantasy points than your current team members and fit within your remaining budget. Sorted by biggest points improvement."
+        collapsed={suggestionsCollapsed}
+        onToggle={() => setSuggestionsCollapsed((v) => !v)}
+        headerRight={
+          suggestions.length > 0 ? (
             <span className="text-xs text-zinc-500">{suggestions.length} upgrades</span>
-          )}
-        </div>
-
-        {!suggestionsCollapsed && (
+          ) : undefined
+        }
+      >
           <div className="p-3 sm:p-4">
             {!teamComplete ? (
               <div className="text-center py-8 text-zinc-500 text-sm">
@@ -300,32 +291,17 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
                     <SuggestionCard key={`${s.current.id}-${s.upgrade.id}`} suggestion={s} index={suggestionPage * PAGE_SIZE + i} />
                   ))}
                 </div>
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-3 pt-4">
-                    <button
-                      onClick={() => setSuggestionPage((p) => Math.max(0, p - 1))}
-                      disabled={suggestionPage === 0}
-                      className="px-3 py-1.5 text-xs rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      Prev
-                    </button>
-                    <span className="text-xs text-zinc-500">
-                      {suggestionPage + 1} / {totalPages} ({suggestions.length})
-                    </span>
-                    <button
-                      onClick={() => setSuggestionPage((p) => Math.min(totalPages - 1, p + 1))}
-                      disabled={suggestionPage >= totalPages - 1}
-                      className="px-3 py-1.5 text-xs rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
+                <Pagination
+                  page={suggestionPage}
+                  totalPages={totalPages}
+                  total={suggestions.length}
+                  onPrev={() => setSuggestionPage((p) => Math.max(0, p - 1))}
+                  onNext={() => setSuggestionPage((p) => Math.min(totalPages - 1, p + 1))}
+                />
               </>
             )}
           </div>
-        )}
-      </div>
+      </CollapsibleSection>
     </div>
   );
 }
