@@ -82,6 +82,8 @@ async function fetchJson<T>(
   }
 
   const response = await fetchWithRetry(url.toString());
+  // OpenF1's free tier returns 401 specifically while a session is live, not as a
+  // generic auth error — surface it as the live-session signal so the UI can react.
   if (response.status === 401) {
     throw new OpenF1LiveSessionError();
   }
@@ -108,7 +110,9 @@ export async function getLatestMeeting(): Promise<Meeting | null> {
   const now = new Date();
   const pastOrCurrent = meetings.filter((m) => new Date(m.date_start) <= now);
 
-  return pastOrCurrent.length > 0 ? pastOrCurrent[pastOrCurrent.length - 1]! : meetings[0]!;
+  // Only return a meeting that has started — a future-only meeting has no practice
+  // data yet, so null (→ 404) is clearer than an empty table.
+  return pastOrCurrent.length > 0 ? pastOrCurrent[pastOrCurrent.length - 1]! : null;
 }
 
 export async function getPracticeSessions(meetingKey: number): Promise<Session[]> {
@@ -144,16 +148,18 @@ export async function getSessionDrivers(sessionKey: number): Promise<Driver[]> {
   );
 }
 
-function findBestLap(laps: Lap[]): Lap | null {
-  const validLaps = laps.filter((l) => l.lap_duration !== null && !l.is_pit_out_lap);
+export function findBestLap(laps: Lap[]): Lap | null {
+  const validLaps = laps.filter(
+    (l): l is Lap & { lap_duration: number } => l.lap_duration !== null && !l.is_pit_out_lap,
+  );
   if (validLaps.length === 0) return null;
 
-  return validLaps.reduce((best, lap) =>
-    lap.lap_duration! < best.lap_duration! ? lap : best,
-  );
+  return validLaps.reduce((best, lap) => (lap.lap_duration < best.lap_duration ? lap : best));
 }
 
-function findBestSectors(laps: Lap[]): DriverPerformance["bestSectors"] {
+export function findBestSectors(laps: Lap[]): DriverPerformance["bestSectors"] {
+  // Unlike findBestLap, this does not require a non-null overall lap_duration: a lap can
+  // have valid sector times even when the overall time is missing (e.g. a deleted lap).
   const validLaps = laps.filter((l) => !l.is_pit_out_lap);
 
   const sector1 = validLaps
@@ -173,7 +179,7 @@ function findBestSectors(laps: Lap[]): DriverPerformance["bestSectors"] {
   };
 }
 
-function findTopSpeed(laps: Lap[]): number | null {
+export function findTopSpeed(laps: Lap[]): number | null {
   const speeds = laps
     .flatMap((l) => [l.i1_speed, l.i2_speed, l.st_speed])
     .filter((v): v is number => v !== null);
@@ -182,16 +188,15 @@ function findTopSpeed(laps: Lap[]): number | null {
 }
 
 export async function getDriverPerformances(sessionKey: number): Promise<DriverPerformance[]> {
-  const [laps, drivers] = await Promise.all([
+  const [laps, drivers, session] = await Promise.all([
     getSessionLaps(sessionKey),
     getSessionDrivers(sessionKey),
+    getOrFetch(
+      `session-info:${sessionKey}`,
+      () => fetchJson("/sessions", { session_key: String(sessionKey) }, z.array(SessionSchema)),
+      CACHE_TTL_MS,
+    ),
   ]);
-
-  const session = await getOrFetch(
-    `session-info:${sessionKey}`,
-    () => fetchJson("/sessions", { session_key: String(sessionKey) }, z.array(SessionSchema)),
-    CACHE_TTL_MS,
-  );
   const sessionName = session[0]?.session_name ?? "Unknown";
 
   const lapsByDriver = new Map<number, Lap[]>();

@@ -8,6 +8,15 @@ interface CacheEntry<T> {
 
 const store = new Map<string, CacheEntry<unknown>>();
 
+// Drops every entry whose TTL has already elapsed. Expired entries linger until read
+// (getCached purges lazily), so sweep them before enforcing the size cap.
+function purgeExpired(): void {
+  const now = Date.now();
+  for (const [key, entry] of store) {
+    if (now > entry.expiresAt) store.delete(key);
+  }
+}
+
 // Evicts the entry closest to expiry (not true LRU — reads don't refresh recency).
 function evictSoonestToExpire(): void {
   let soonestKey: string | null = null;
@@ -41,7 +50,8 @@ export function getCached<T>(key: string): T | null {
 
 export function setCache<T>(key: string, data: T, ttlMs: number = DEFAULT_TTL_MS): void {
   if (store.size >= MAX_CACHE_ENTRIES && !store.has(key)) {
-    evictSoonestToExpire();
+    purgeExpired();
+    if (store.size >= MAX_CACHE_ENTRIES) evictSoonestToExpire();
   }
 
   store.set(key, {

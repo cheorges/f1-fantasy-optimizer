@@ -50,15 +50,29 @@ function toNumber(value: string): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+function toInt(value: string, label: string): number {
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed)) {
+    throw new Error(`Invalid ${label}: ${JSON.stringify(value)}`);
+  }
+  return parsed;
+}
+
+// Throws on failure rather than defaulting to a round, so a transient calendar outage
+// can't silently serve stale season-opener prices (and the bad value isn't cached).
 async function getCurrentRound(): Promise<number> {
   return getOrFetch(
     "fantasy:current-round",
     async () => {
       const response = await fetchWithRetry(CALENDAR_URL);
-      if (!response.ok) return 1;
+      if (!response.ok) {
+        throw new Error(`Ergast calendar error: ${response.status} ${response.statusText}`);
+      }
 
       const parsed = ErgastResponseSchema.safeParse(await response.json());
-      if (!parsed.success) return 1;
+      if (!parsed.success) {
+        throw new Error(`Ergast calendar shape changed: ${parsed.error.issues[0]?.message ?? "unknown"}`);
+      }
 
       const races = parsed.data.MRData.RaceTable.Races;
       const now = new Date();
@@ -66,13 +80,16 @@ async function getCurrentRound(): Promise<number> {
       // Find the next upcoming or most recent race
       for (const race of races) {
         if (new Date(race.date) >= now) {
-          return parseInt(race.round, 10);
+          return toInt(race.round, "race round");
         }
       }
 
-      // If all races are past, return the last round
+      // If all races are past, use the last round
       const lastRace = races[races.length - 1];
-      return lastRace ? parseInt(lastRace.round, 10) : 1;
+      if (!lastRace) {
+        throw new Error("Ergast calendar returned no races");
+      }
+      return toInt(lastRace.round, "race round");
     },
     CACHE_TTL_MS,
   );
@@ -80,7 +97,7 @@ async function getCurrentRound(): Promise<number> {
 
 function parseDriver(raw: RawFantasyPlayer): FantasyDriver {
   return {
-    id: parseInt(raw.PlayerId, 10),
+    id: toInt(raw.PlayerId, "PlayerId"),
     firstName: raw.FirstName,
     lastName: raw.LastName,
     tla: raw.DriverTLA,
@@ -95,7 +112,7 @@ function parseDriver(raw: RawFantasyPlayer): FantasyDriver {
 
 function parseConstructor(raw: RawFantasyPlayer): FantasyConstructor {
   return {
-    id: parseInt(raw.PlayerId, 10),
+    id: toInt(raw.PlayerId, "PlayerId"),
     name: raw.FUllName,
     price: raw.Value,
     selectedPercentage: toNumber(raw.SelectedPercentage),
