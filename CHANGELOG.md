@@ -9,8 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Unit test suite (Vitest) for the recommendation engine, name matching, value score, and cache
+- Tests for the team-upgrade optimizer, retry logic, live-session detection, Fantasy feed field mapping, and the lap/sector/top-speed reducers
 - Runtime validation of external feeds (OpenF1, F1 Fantasy, Ergast) with zod
 - Reusable `CollapsibleSection` and `Pagination` components
+- Shared `format` module for lap time, price, and price-change formatting
+- Centralized API response types shared between routes and client
 
 ### Changed
 
@@ -20,6 +23,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Centralized the `USE_MOCK_DATA` flag into a single config module
 - Split the page into a `TrainingTab` component plus shared building blocks
 - Renamed the cache eviction to reflect its actual soonest-to-expire behavior (previously mislabeled as LRU)
+- The Team and Prices tabs now reuse the shared `CollapsibleSection` and `Pagination` components instead of hand-rolled copies
+- External API calls are now bounded by a per-attempt request timeout so a hung upstream can't block a route
+- The cache now purges expired entries before evicting to enforce its size cap
+- Session info is fetched alongside laps and drivers in parallel rather than sequentially
 
 ### Fixed
 
@@ -27,6 +34,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Driver matching now uses the three-letter acronym instead of last name, fixing mismatches on names with diacritics (e.g. Hülkenberg)
 - Constructor matching reconciles sponsor-prefixed Fantasy names via a canonical alias map without falsely merging distinct teams
 - External feeds now fail loudly on a shape change instead of silently producing `NaN`
+- The current round now fails loudly on a calendar outage instead of silently serving season-opener prices, and an invalid player/round id is rejected rather than becoming `NaN`
+- A future-only race weekend now returns no meeting (404) instead of an empty driver table
+- The error banner clears on a successful refetch instead of persisting
+- Removed the unused `/api/recommendations` route and a dead driver sort field
 - Retry logic no longer swallows the final failed attempt
 - Toast notification timer is cleared on unmount and no longer stacks
 - Training round indicator shows the actual round instead of the internal meeting key

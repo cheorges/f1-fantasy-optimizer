@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import type { FantasyDriver, FantasyConstructor } from "@/lib/types";
-import InfoTooltip from "@/components/InfoTooltip";
+import { formatPrice, formatPriceChange } from "@/lib/format";
+import CollapsibleSection from "@/components/CollapsibleSection";
 
 type DriverSortField = "price" | "priceChange" | "selectedPercentage" | "overallPoints";
 type ConstructorSortField = "price" | "priceChange" | "selectedPercentage" | "overallPoints";
@@ -13,16 +14,6 @@ interface PriceTableProps {
   constructors: FantasyConstructor[];
   round: number;
   loading: boolean;
-}
-
-function formatPrice(price: number): string {
-  return `$${price.toFixed(1)}M`;
-}
-
-function formatPriceChange(change: number): string {
-  if (change === 0) return "-";
-  const sign = change > 0 ? "+" : "";
-  return `${sign}${change.toFixed(1)}M`;
 }
 
 function priceChangeColor(change: number): string {
@@ -71,20 +62,13 @@ function DriverPriceSection({ drivers }: { drivers: FantasyDriver[] }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800">
-      <div
-        className="px-3 sm:px-4 py-3 border-b border-zinc-800 flex items-center justify-between cursor-pointer select-none"
-        onClick={() => setCollapsed((v) => !v)}
-      >
-        <div className="flex items-center">
-          <span className="text-zinc-500 mr-2 text-xs">{collapsed ? "\u25B6" : "\u25BC"}</span>
-          <h2 className="font-semibold text-zinc-200">Driver Prices</h2>
-          <InfoTooltip text="All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this driver. Points are the total F1 Fantasy points earned this season." />
-        </div>
-        <span className="text-xs text-zinc-500">{drivers.length} drivers</span>
-      </div>
-
-      {!collapsed && <>
+    <CollapsibleSection
+      title="Driver Prices"
+      info="All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this driver. Points are the total F1 Fantasy points earned this season."
+      collapsed={collapsed}
+      onToggle={() => setCollapsed((v) => !v)}
+      headerRight={<span className="text-xs text-zinc-500">{drivers.length} drivers</span>}
+    >
       {/* Mobile: Card layout */}
       <div className="sm:hidden">
         <div className="px-3 py-2 flex gap-2 flex-wrap border-b border-zinc-800">
@@ -188,8 +172,7 @@ function DriverPriceSection({ drivers }: { drivers: FantasyDriver[] }) {
           </tbody>
         </table>
       </div>
-      </>}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -198,20 +181,13 @@ function ConstructorPriceSection({ constructors }: { constructors: FantasyConstr
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800">
-      <div
-        className="px-3 sm:px-4 py-3 border-b border-zinc-800 flex items-center justify-between cursor-pointer select-none"
-        onClick={() => setCollapsed((v) => !v)}
-      >
-        <div className="flex items-center">
-          <span className="text-zinc-500 mr-2 text-xs">{collapsed ? "\u25B6" : "\u25BC"}</span>
-          <h2 className="font-semibold text-zinc-200">Constructor Prices</h2>
-          <InfoTooltip text="All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this constructor. Points are the total F1 Fantasy points earned this season." />
-        </div>
-        <span className="text-xs text-zinc-500">{constructors.length} constructors</span>
-      </div>
-
-      {!collapsed && <>
+    <CollapsibleSection
+      title="Constructor Prices"
+      info="All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this constructor. Points are the total F1 Fantasy points earned this season."
+      collapsed={collapsed}
+      onToggle={() => setCollapsed((v) => !v)}
+      headerRight={<span className="text-xs text-zinc-500">{constructors.length} constructors</span>}
+    >
       {/* Mobile: Card layout */}
       <div className="sm:hidden">
         <div className="px-3 py-2 flex gap-2 flex-wrap border-b border-zinc-800">
@@ -304,8 +280,7 @@ function ConstructorPriceSection({ constructors }: { constructors: FantasyConstr
           </tbody>
         </table>
       </div>
-      </>}
-    </div>
+    </CollapsibleSection>
   );
 }
 

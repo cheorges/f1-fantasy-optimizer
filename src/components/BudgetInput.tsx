@@ -6,7 +6,7 @@ interface BudgetInputProps {
   disabled: boolean;
 }
 
-const PRESETS = [0, 1, 2.5, 5, 10];
+export const BUDGET_PRESETS = [0, 1, 2.5, 5, 10];
 
 export default function BudgetInput({ value, onChange, disabled }: BudgetInputProps) {
   return (
@@ -29,7 +29,7 @@ export default function BudgetInput({ value, onChange, disabled }: BudgetInputPr
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs">M</span>
         </div>
         <div className="flex gap-1.5 flex-wrap">
-          {PRESETS.map((preset) => (
+          {BUDGET_PRESETS.map((preset) => (
             <button
               key={preset}
               onClick={() => onChange(preset)}

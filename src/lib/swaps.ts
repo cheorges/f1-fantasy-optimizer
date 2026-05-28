@@ -35,6 +35,10 @@ function compareSwaps(a: SwapDelta, b: SwapDelta): number {
   return b.valueScoreDelta - a.valueScoreDelta;
 }
 
+type PricedCandidate = SwapCandidate & { lapTime: number; price: number };
+
+// R extends SwapDelta because results carry the delta fields (via `...delta`) that
+// compareSwaps sorts on.
 function buildSwaps<T, R extends SwapDelta>(
   items: T[],
   toCandidate: (item: T) => SwapCandidate,
@@ -43,7 +47,10 @@ function buildSwaps<T, R extends SwapDelta>(
 ): R[] {
   const withData = items
     .map((item) => ({ item, candidate: toCandidate(item) }))
-    .filter(({ candidate }) => candidate.lapTime !== null && candidate.price !== null);
+    .filter(
+      (x): x is { item: T; candidate: PricedCandidate } =>
+        x.candidate.lapTime !== null && x.candidate.price !== null,
+    );
 
   const results: R[] = [];
 
@@ -51,11 +58,11 @@ function buildSwaps<T, R extends SwapDelta>(
     for (const into of withData) {
       if (out.candidate.id === into.candidate.id) continue;
 
-      const priceDelta = (into.candidate.price as number) - (out.candidate.price as number);
-      if ((into.candidate.lapTime as number) >= (out.candidate.lapTime as number)) continue;
+      const priceDelta = into.candidate.price - out.candidate.price;
+      if (into.candidate.lapTime >= out.candidate.lapTime) continue;
       if (priceDelta > budget) continue;
 
-      const timeDelta = (out.candidate.lapTime as number) - (into.candidate.lapTime as number);
+      const timeDelta = out.candidate.lapTime - into.candidate.lapTime;
       const valueScoreDelta = (into.candidate.valueScore ?? 0) - (out.candidate.valueScore ?? 0);
       const reason = buildReason(into.candidate.label, timeDelta, priceDelta);
 

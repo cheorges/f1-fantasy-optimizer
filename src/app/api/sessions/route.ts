@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getLatestMeeting, getPracticeSessions, OpenF1LiveSessionError } from "@/lib/openf1";
 import { MOCK_MEETING, MOCK_SESSIONS } from "@/lib/mock-data";
 import { USE_MOCK_DATA } from "@/lib/config";
+import type { SessionsResponse } from "@/lib/api-types";
 
 export async function GET(): Promise<NextResponse> {
   if (USE_MOCK_DATA) {
-    return NextResponse.json({ meeting: MOCK_MEETING, sessions: MOCK_SESSIONS });
+    return NextResponse.json<SessionsResponse>({ meeting: MOCK_MEETING, sessions: MOCK_SESSIONS });
   }
 
   try {
@@ -16,7 +17,7 @@ export async function GET(): Promise<NextResponse> {
 
     const sessions = await getPracticeSessions(meeting.meeting_key);
 
-    return NextResponse.json({
+    return NextResponse.json<SessionsResponse>({
       meeting,
       sessions,
     });
