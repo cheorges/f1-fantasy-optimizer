@@ -61,6 +61,10 @@ export interface Meeting {
   circuit_short_name: string;
 }
 
+// Direction the price is drifting, derived from price and ownership movement over the
+// last few rounds. null means there isn't enough history yet to say anything.
+export type PriceTrend = "up" | "down" | "flat";
+
 export interface FantasyDriver {
   id: number;
   firstName: string;
@@ -72,6 +76,7 @@ export interface FantasyDriver {
   overallPoints: number;
   gamedayPoints: number;
   priceChange: number;
+  trend: PriceTrend | null;
 }
 
 export interface FantasyConstructor {
@@ -82,6 +87,7 @@ export interface FantasyConstructor {
   overallPoints: number;
   gamedayPoints: number;
   priceChange: number;
+  trend: PriceTrend | null;
 }
 
 export interface FantasyData {

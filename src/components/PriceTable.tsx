@@ -1,9 +1,30 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { FantasyDriver, FantasyConstructor } from "@/lib/types";
+import type { FantasyDriver, FantasyConstructor, PriceTrend } from "@/lib/types";
 import { formatPrice, formatPriceChange } from "@/lib/format";
 import CollapsibleSection from "@/components/CollapsibleSection";
+
+const TREND_INFO = "Trend is an estimate, not a forecast. The Fantasy feed publishes no transfer numbers, so it is derived from how the price and the ownership percentage have moved over the last three rounds. It reads as stable when the two disagree, or when neither has moved. One of them standing still does not cancel the other — ownership is published as a whole percent, so small shifts show up as no change.";
+
+const TREND_DISPLAY: Record<PriceTrend, { symbol: string; label: string; className: string }> = {
+  up: { symbol: "↑", label: "Rising", className: "text-emerald-400" },
+  down: { symbol: "↓", label: "Falling", className: "text-red-400" },
+  flat: { symbol: "→", label: "Stable", className: "text-zinc-500" },
+};
+
+function TrendCell({ trend, compact = false }: { trend: PriceTrend | null; compact?: boolean }) {
+  if (trend === null) {
+    return <span className="text-zinc-600" title="Not enough round history yet">&#8212;</span>;
+  }
+  const { symbol, label, className } = TREND_DISPLAY[trend];
+  return (
+    <span className={className} title={label}>
+      {symbol}
+      {!compact && <span className="ml-1 text-xs">{label}</span>}
+    </span>
+  );
+}
 
 type DriverSortField = "price" | "priceChange" | "selectedPercentage" | "overallPoints";
 type ConstructorSortField = "price" | "priceChange" | "selectedPercentage" | "overallPoints";
@@ -64,7 +85,7 @@ function DriverPriceSection({ drivers }: { drivers: FantasyDriver[] }) {
   return (
     <CollapsibleSection
       title="Driver Prices"
-      info="All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this driver. Points are the total F1 Fantasy points earned this season."
+      info={`All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this driver. Points are the total F1 Fantasy points earned this season. ${TREND_INFO}`}
       collapsed={collapsed}
       onToggle={() => setCollapsed((v) => !v)}
       headerRight={<span className="text-xs text-zinc-500">{drivers.length} drivers</span>}
@@ -83,7 +104,7 @@ function DriverPriceSection({ drivers }: { drivers: FantasyDriver[] }) {
               <button
                 key={field}
                 onClick={() => handleSort(field)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                className={`min-h-[44px] px-3 rounded-full text-xs font-medium transition-colors ${
                   sortField === field
                     ? "bg-red-600 text-white"
                     : "bg-zinc-800 text-zinc-400 active:bg-zinc-700"
@@ -109,6 +130,7 @@ function DriverPriceSection({ drivers }: { drivers: FantasyDriver[] }) {
                 <span className={`font-mono text-xs ${priceChangeColor(driver.priceChange)}`}>
                   {formatPriceChange(driver.priceChange)}
                 </span>
+                <span className="text-sm"><TrendCell trend={driver.trend} compact /></span>
                 <span className="text-xs text-zinc-400">{driver.selectedPercentage.toFixed(1)}%</span>
                 <span className="text-xs text-zinc-400">{driver.overallPoints} pts</span>
               </div>
@@ -136,6 +158,7 @@ function DriverPriceSection({ drivers }: { drivers: FantasyDriver[] }) {
               >
                 Change{indicator("priceChange")}
               </th>
+              <th className="py-3 px-3">Trend</th>
               <th
                 className="py-3 px-3 cursor-pointer hover:text-zinc-200"
                 onClick={() => handleSort("selectedPercentage")}
@@ -165,6 +188,7 @@ function DriverPriceSection({ drivers }: { drivers: FantasyDriver[] }) {
                 <td className={`py-3 px-3 font-mono ${priceChangeColor(driver.priceChange)}`}>
                   {formatPriceChange(driver.priceChange)}
                 </td>
+                <td className="py-3 px-3 whitespace-nowrap"><TrendCell trend={driver.trend} /></td>
                 <td className="py-3 px-3 text-zinc-400">{driver.selectedPercentage.toFixed(1)}%</td>
                 <td className="py-3 px-3 font-mono">{driver.overallPoints}</td>
               </tr>
@@ -183,7 +207,7 @@ function ConstructorPriceSection({ constructors }: { constructors: FantasyConstr
   return (
     <CollapsibleSection
       title="Constructor Prices"
-      info="All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this constructor. Points are the total F1 Fantasy points earned this season."
+      info={`All prices come from the official F1 Fantasy game feed. Price changes show the difference to the previous round. 'Selected' shows how many fantasy players have picked this constructor. Points are the total F1 Fantasy points earned this season. ${TREND_INFO}`}
       collapsed={collapsed}
       onToggle={() => setCollapsed((v) => !v)}
       headerRight={<span className="text-xs text-zinc-500">{constructors.length} constructors</span>}
@@ -202,7 +226,7 @@ function ConstructorPriceSection({ constructors }: { constructors: FantasyConstr
               <button
                 key={field}
                 onClick={() => handleSort(field)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                className={`min-h-[44px] px-3 rounded-full text-xs font-medium transition-colors ${
                   sortField === field
                     ? "bg-red-600 text-white"
                     : "bg-zinc-800 text-zinc-400 active:bg-zinc-700"
@@ -222,6 +246,7 @@ function ConstructorPriceSection({ constructors }: { constructors: FantasyConstr
                 <span className={`font-mono text-xs ${priceChangeColor(constructor.priceChange)}`}>
                   {formatPriceChange(constructor.priceChange)}
                 </span>
+                <span className="text-sm"><TrendCell trend={constructor.trend} compact /></span>
                 <span className="text-xs text-zinc-400">{constructor.selectedPercentage.toFixed(1)}%</span>
                 <span className="text-xs text-zinc-400">{constructor.overallPoints} pts</span>
               </div>
@@ -248,6 +273,7 @@ function ConstructorPriceSection({ constructors }: { constructors: FantasyConstr
               >
                 Change{indicator("priceChange")}
               </th>
+              <th className="py-3 px-3">Trend</th>
               <th
                 className="py-3 px-3 cursor-pointer hover:text-zinc-200"
                 onClick={() => handleSort("selectedPercentage")}
@@ -273,6 +299,7 @@ function ConstructorPriceSection({ constructors }: { constructors: FantasyConstr
                 <td className={`py-3 px-3 font-mono ${priceChangeColor(constructor.priceChange)}`}>
                   {formatPriceChange(constructor.priceChange)}
                 </td>
+                <td className="py-3 px-3 whitespace-nowrap"><TrendCell trend={constructor.trend} /></td>
                 <td className="py-3 px-3 text-zinc-400">{constructor.selectedPercentage.toFixed(1)}%</td>
                 <td className="py-3 px-3 font-mono">{constructor.overallPoints}</td>
               </tr>

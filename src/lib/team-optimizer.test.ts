@@ -17,6 +17,7 @@ function driver(overrides: Partial<FantasyDriver>): FantasyDriver {
     overallPoints: 100,
     gamedayPoints: 0,
     priceChange: 0,
+    trend: null,
     ...overrides,
   };
 }
@@ -30,6 +31,7 @@ function constructor(overrides: Partial<FantasyConstructor>): FantasyConstructor
     overallPoints: 100,
     gamedayPoints: 0,
     priceChange: 0,
+    trend: null,
     ...overrides,
   };
 }
