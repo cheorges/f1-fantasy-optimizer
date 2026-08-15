@@ -128,7 +128,7 @@ export default function DriverTable({ drivers, loading, visibleColumns }: Driver
                 key={field}
                 onClick={() => handleSort(field)}
                 aria-label={`Sort by ${label}`}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                className={`min-h-[44px] px-3 rounded-full text-xs font-medium transition-colors ${
                   sortField === field
                     ? "bg-red-600 text-white"
                     : "bg-zinc-800 text-zinc-400 active:bg-zinc-700"

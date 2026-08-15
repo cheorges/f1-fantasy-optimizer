@@ -16,7 +16,7 @@ export default function Pagination({ page, totalPages, total, onPrev, onNext }: 
       <button
         onClick={onPrev}
         disabled={page === 0}
-        className="px-3 py-1.5 text-xs rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+        className="min-h-[44px] px-5 text-xs rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed"
       >
         Prev
       </button>
@@ -26,7 +26,7 @@ export default function Pagination({ page, totalPages, total, onPrev, onNext }: 
       <button
         onClick={onNext}
         disabled={page >= totalPages - 1}
-        className="px-3 py-1.5 text-xs rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+        className="min-h-[44px] px-5 text-xs rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed"
       >
         Next
       </button>
