@@ -1,25 +1,82 @@
-import type { FantasyDriver, FantasyConstructor, FantasyTeam, PointsSwapSuggestion } from "./types";
+import type { FantasyDriver, FantasyConstructor, FantasyTeam, TeamStore, PointsSwapSuggestion } from "./types";
+import { BUDGET_MIN } from "./config";
 
 const STORAGE_KEY = "f1-fantasy-team";
 
-export function loadTeam(): FantasyTeam | null {
-  if (typeof window === "undefined") return null;
+export const MAX_TEAMS = 3;
+
+export function makeTeam(index: number): FantasyTeam {
+  return {
+    id: `team-${index + 1}`,
+    name: `Team ${index + 1}`,
+    driverIds: [],
+    constructorIds: [],
+    budget: BUDGET_MIN,
+  };
+}
+
+function emptyStore(): TeamStore {
+  const first = makeTeam(0);
+  return { version: 2, teams: [first], activeId: first.id };
+}
+
+function isSlotArray(value: unknown): value is (number | null)[] {
+  return Array.isArray(value) && value.every((v) => typeof v === "number" || v === null);
+}
+
+function parseTeam(raw: unknown, index: number): FantasyTeam | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const t = raw as Record<string, unknown>;
+  if (!isSlotArray(t.driverIds) || !isSlotArray(t.constructorIds)) return null;
+
+  const fallback = makeTeam(index);
+  return {
+    id: typeof t.id === "string" && t.id ? t.id : fallback.id,
+    name: typeof t.name === "string" && t.name ? t.name : fallback.name,
+    driverIds: t.driverIds,
+    constructorIds: t.constructorIds,
+    budget: typeof t.budget === "number" && Number.isFinite(t.budget) ? t.budget : fallback.budget,
+  };
+}
+
+// Reads both the v2 store and the pre-v2 shape (a bare {driverIds, constructorIds}),
+// so an existing single team survives the upgrade instead of being silently dropped.
+export function loadTeams(): TeamStore {
+  if (typeof window === "undefined") return emptyStore();
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed.driverIds) && Array.isArray(parsed.constructorIds)) {
-      return parsed as FantasyTeam;
+    if (!raw) return emptyStore();
+
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return emptyStore();
+    const store = parsed as Record<string, unknown>;
+
+    if (Array.isArray(store.teams)) {
+      const teams = store.teams
+        .map((team, i) => parseTeam(team, i))
+        .filter((team): team is FantasyTeam => team !== null)
+        .slice(0, MAX_TEAMS);
+      if (teams.length === 0) return emptyStore();
+
+      const activeId = typeof store.activeId === "string" && teams.some((t) => t.id === store.activeId)
+        ? store.activeId
+        : teams[0]!.id;
+      return { version: 2, teams, activeId };
     }
-    return null;
+
+    const legacy = parseTeam(store, 0);
+    if (legacy) return { version: 2, teams: [legacy], activeId: legacy.id };
+
+    return emptyStore();
   } catch {
-    return null;
+    return emptyStore();
   }
 }
 
-export function saveTeam(team: FantasyTeam): void {
+export function saveTeams(store: TeamStore): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(team));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 
 export function getTeamSuggestions(

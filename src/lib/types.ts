@@ -146,8 +146,18 @@ export interface ConstructorSwapRecommendation {
 }
 
 export interface FantasyTeam {
-  driverIds: number[];
-  constructorIds: number[];
+  id: string;
+  name: string;
+  // Slot arrays: null means an empty slot, so clearing one doesn't shift the others.
+  driverIds: (number | null)[];
+  constructorIds: (number | null)[];
+  budget: number;
+}
+
+export interface TeamStore {
+  version: 2;
+  teams: FantasyTeam[];
+  activeId: string;
 }
 
 export interface PointsSwapSuggestion {
