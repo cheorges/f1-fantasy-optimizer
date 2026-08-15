@@ -22,7 +22,7 @@ export interface Lap {
   i2_speed: number | null;
   st_speed: number | null;
   is_pit_out_lap: boolean;
-  date_start: string;
+  date_start: string | null;
 }
 
 export interface Driver {
@@ -33,7 +33,7 @@ export interface Driver {
   name_acronym: string;
   team_name: string;
   team_colour: string;
-  country_code: string;
+  country_code: string | null;
   headshot_url: string | null;
   session_key: number;
 }

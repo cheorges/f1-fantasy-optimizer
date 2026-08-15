@@ -52,7 +52,9 @@ const LapSchema = z
     i2_speed: z.number().nullable(),
     st_speed: z.number().nullable(),
     is_pit_out_lap: z.boolean(),
-    date_start: z.string(),
+    // Occasionally null for a single lap in a session; unused by the reducers, so it
+    // must not take the whole session's laps down with it.
+    date_start: z.string().nullable(),
   })
   .passthrough();
 
@@ -65,7 +67,9 @@ const DriverSchema = z
     name_acronym: z.string(),
     team_name: z.string(),
     team_colour: z.string(),
-    country_code: z.string(),
+    // OpenF1 sends null here for whole sessions (seen on the 2026 Hungarian GP), and the
+    // field is unused — so it must not be allowed to fail the whole driver fetch.
+    country_code: z.string().nullable(),
     headshot_url: z.string().nullable(),
     session_key: z.number(),
   })
