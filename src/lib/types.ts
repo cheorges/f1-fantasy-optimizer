@@ -22,7 +22,7 @@ export interface Lap {
   i2_speed: number | null;
   st_speed: number | null;
   is_pit_out_lap: boolean;
-  date_start: string;
+  date_start: string | null;
 }
 
 export interface Driver {
@@ -33,7 +33,7 @@ export interface Driver {
   name_acronym: string;
   team_name: string;
   team_colour: string;
-  country_code: string;
+  country_code: string | null;
   headshot_url: string | null;
   session_key: number;
 }
@@ -61,6 +61,10 @@ export interface Meeting {
   circuit_short_name: string;
 }
 
+// Direction the price is drifting, derived from price and ownership movement over the
+// last few rounds. null means there isn't enough history yet to say anything.
+export type PriceTrend = "up" | "down" | "flat";
+
 export interface FantasyDriver {
   id: number;
   firstName: string;
@@ -72,6 +76,7 @@ export interface FantasyDriver {
   overallPoints: number;
   gamedayPoints: number;
   priceChange: number;
+  trend: PriceTrend | null;
 }
 
 export interface FantasyConstructor {
@@ -82,6 +87,7 @@ export interface FantasyConstructor {
   overallPoints: number;
   gamedayPoints: number;
   priceChange: number;
+  trend: PriceTrend | null;
 }
 
 export interface FantasyData {
@@ -146,8 +152,18 @@ export interface ConstructorSwapRecommendation {
 }
 
 export interface FantasyTeam {
-  driverIds: number[];
-  constructorIds: number[];
+  id: string;
+  name: string;
+  // Slot arrays: null means an empty slot, so clearing one doesn't shift the others.
+  driverIds: (number | null)[];
+  constructorIds: (number | null)[];
+  budget: number;
+}
+
+export interface TeamStore {
+  version: 2;
+  teams: FantasyTeam[];
+  activeId: string;
 }
 
 export interface PointsSwapSuggestion {

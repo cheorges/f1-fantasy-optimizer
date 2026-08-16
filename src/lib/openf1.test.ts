@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { findBestLap, findBestSectors, findTopSpeed } from "./openf1";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { findBestLap, findBestSectors, findTopSpeed, getSessionDrivers, getSessionLaps } from "./openf1";
+import { clearCache } from "./cache";
 import type { Lap } from "./types";
 
 function lap(overrides: Partial<Lap>): Lap {
@@ -71,5 +72,57 @@ describe("findTopSpeed", () => {
 
   it("returns null when all speeds are null", () => {
     expect(findTopSpeed([lap({ i1_speed: null, i2_speed: null, st_speed: null })])).toBeNull();
+  });
+});
+
+// Regression: OpenF1 sends null in fields it otherwise types as strings. Because the
+// schemas fail loudly, a single null used to take down the whole session fetch.
+describe("feed tolerance for nulls", () => {
+  beforeEach(() => {
+    clearCache();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("accepts a null country_code on drivers", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([{
+      driver_number: 4,
+      first_name: "Lando",
+      last_name: "Norris",
+      full_name: "Lando NORRIS",
+      name_acronym: "NOR",
+      team_name: "McLaren",
+      team_colour: "F47600",
+      country_code: null,
+      headshot_url: null,
+      session_key: 11337,
+    }]), { status: 200 })));
+
+    const drivers = await getSessionDrivers(11337);
+    expect(drivers).toHaveLength(1);
+    expect(drivers[0]!.country_code).toBeNull();
+  });
+
+  it("accepts a null date_start on a lap", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([{
+      session_key: 11337,
+      driver_number: 4,
+      lap_number: 1,
+      lap_duration: 78.5,
+      duration_sector_1: 26,
+      duration_sector_2: 26,
+      duration_sector_3: 26.5,
+      i1_speed: 300,
+      i2_speed: 300,
+      st_speed: 300,
+      is_pit_out_lap: false,
+      date_start: null,
+    }]), { status: 200 })));
+
+    const laps = await getSessionLaps(11337);
+    expect(laps).toHaveLength(1);
+    expect(laps[0]!.date_start).toBeNull();
   });
 });

@@ -1,6 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { getTeamSuggestions } from "./team-optimizer";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { getTeamSuggestions, loadTeams, saveTeams, makeTeam, MAX_TEAMS } from "./team-optimizer";
 import type { FantasyDriver, FantasyConstructor } from "./types";
+
+// Pinned on purpose: renaming this key would orphan every saved team.
+const STORAGE_KEY = "f1-fantasy-team";
 
 function driver(overrides: Partial<FantasyDriver>): FantasyDriver {
   return {
@@ -14,6 +17,7 @@ function driver(overrides: Partial<FantasyDriver>): FantasyDriver {
     overallPoints: 100,
     gamedayPoints: 0,
     priceChange: 0,
+    trend: null,
     ...overrides,
   };
 }
@@ -27,6 +31,7 @@ function constructor(overrides: Partial<FantasyConstructor>): FantasyConstructor
     overallPoints: 100,
     gamedayPoints: 0,
     priceChange: 0,
+    trend: null,
     ...overrides,
   };
 }
@@ -84,5 +89,78 @@ describe("getTeamSuggestions", () => {
     ];
     const suggestions = getTeamSuggestions([1], [100], drivers, constructors, 100);
     expect(suggestions.map((s) => s.type).sort()).toEqual(["constructor", "driver"]);
+  });
+});
+
+describe("team storage", () => {
+  let stored: Record<string, string>;
+
+  beforeEach(() => {
+    stored = {};
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => stored[key] ?? null,
+      setItem: (key: string, value: string) => { stored[key] = value; },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("starts with one empty team when nothing is stored", () => {
+    const store = loadTeams();
+    expect(store.teams).toHaveLength(1);
+    expect(store.activeId).toBe(store.teams[0]!.id);
+    expect(store.teams[0]!.driverIds).toEqual([]);
+  });
+
+  it("lifts a pre-v2 bare team into the versioned store instead of dropping it", () => {
+    stored[STORAGE_KEY] = JSON.stringify({ driverIds: [1, 2, 3], constructorIds: [100] });
+
+    const store = loadTeams();
+
+    expect(store.version).toBe(2);
+    expect(store.teams).toHaveLength(1);
+    expect(store.teams[0]!.driverIds).toEqual([1, 2, 3]);
+    expect(store.teams[0]!.constructorIds).toEqual([100]);
+    expect(store.teams[0]!.name).toBe("Team 1");
+  });
+
+  it("round-trips a multi-team store", () => {
+    const original = {
+      version: 2 as const,
+      teams: [makeTeam(0), { ...makeTeam(1), name: "Mini League", driverIds: [7, null, 9] }],
+      activeId: makeTeam(1).id,
+    };
+    saveTeams(original);
+
+    const store = loadTeams();
+    expect(store.teams).toHaveLength(2);
+    expect(store.teams[1]!.name).toBe("Mini League");
+    expect(store.teams[1]!.driverIds).toEqual([7, null, 9]);
+    expect(store.activeId).toBe(makeTeam(1).id);
+  });
+
+  it("never returns more teams than the cap", () => {
+    saveTeams({
+      version: 2,
+      teams: [makeTeam(0), makeTeam(1), makeTeam(2), makeTeam(3), makeTeam(4)],
+      activeId: makeTeam(0).id,
+    });
+    expect(loadTeams().teams).toHaveLength(MAX_TEAMS);
+  });
+
+  it("falls back to an empty store on unparseable or malformed data", () => {
+    stored[STORAGE_KEY] = "not json";
+    expect(loadTeams().teams).toHaveLength(1);
+
+    stored[STORAGE_KEY] = JSON.stringify({ driverIds: "nope", constructorIds: [] });
+    expect(loadTeams().teams[0]!.driverIds).toEqual([]);
+  });
+
+  it("falls back to the first team when the stored active id is gone", () => {
+    saveTeams({ version: 2, teams: [makeTeam(0)], activeId: "team-does-not-exist" });
+    expect(loadTeams().activeId).toBe(makeTeam(0).id);
   });
 });

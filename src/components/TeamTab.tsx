@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import type { FantasyDriver, FantasyConstructor, PointsSwapSuggestion } from "@/lib/types";
-import { loadTeam, saveTeam, getTeamSuggestions } from "@/lib/team-optimizer";
+import type { FantasyDriver, FantasyConstructor, FantasyTeam, TeamStore, PointsSwapSuggestion } from "@/lib/types";
+import { loadTeams, saveTeams, makeTeam, getTeamSuggestions, MAX_TEAMS } from "@/lib/team-optimizer";
 import { formatPrice } from "@/lib/format";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import Pagination from "@/components/Pagination";
-import { BUDGET_PRESETS } from "@/components/BudgetInput";
+import BudgetSlider from "@/components/BudgetSlider";
 import InfoTooltip from "@/components/InfoTooltip";
 
 interface TeamTabProps {
@@ -21,48 +21,103 @@ const CONSTRUCTOR_SLOTS = 2;
 const BUDGET_CAP = 100;
 const PAGE_SIZE = 10;
 
+function fitSlots(ids: (number | null)[], slots: number): (number | null)[] {
+  const next: (number | null)[] = [...ids];
+  while (next.length < slots) next.push(null);
+  return next.slice(0, slots);
+}
+
+function filled(ids: (number | null)[]): number[] {
+  return ids.filter((id): id is number => id !== null);
+}
+
+function initialStore(): TeamStore {
+  const first = makeTeam(0);
+  return { version: 2, teams: [first], activeId: first.id };
+}
+
 export default function TeamTab({ drivers, constructors, round, loading }: TeamTabProps) {
-  const [driverIds, setDriverIds] = useState<(number | null)[]>(Array(DRIVER_SLOTS).fill(null));
-  const [constructorIds, setConstructorIds] = useState<(number | null)[]>(Array(CONSTRUCTOR_SLOTS).fill(null));
-  const [remainingBudget, setRemainingBudget] = useState(0);
+  // Held in a ref so the save effect can recognise it by identity and skip it.
+  const initial = useRef<TeamStore>(initialStore());
+  const [store, setStore] = useState<TeamStore>(initial.current);
+  const [renaming, setRenaming] = useState(false);
   const [teamCollapsed, setTeamCollapsed] = useState(false);
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
   const [suggestionPage, setSuggestionPage] = useState(0);
 
   const restoredFromStorage = useRef(false);
 
-  // Restore the saved team once the fantasy data is available to validate IDs against.
+  // Restore the saved teams once the fantasy data is available to validate IDs against.
   // localStorage is read in an effect (not lazy state init) to avoid SSR hydration
   // mismatch, and guarded so a later data refresh can't clobber the user's edits.
   useEffect(() => {
     if (restoredFromStorage.current) return;
     if (drivers.length === 0 && constructors.length === 0) return;
 
-    const saved = loadTeam();
+    const saved = loadTeams();
     restoredFromStorage.current = true;
-    if (!saved) return;
 
-    const validDriverIds = saved.driverIds.filter((id) => drivers.some((d) => d.id === id));
-    const validConstructorIds = saved.constructorIds.filter((id) => constructors.some((c) => c.id === id));
+    const teams = saved.teams.map((team) => ({
+      ...team,
+      driverIds: fitSlots(
+        team.driverIds.map((id) => (drivers.some((d) => d.id === id) ? id : null)),
+        DRIVER_SLOTS,
+      ),
+      constructorIds: fitSlots(
+        team.constructorIds.map((id) => (constructors.some((c) => c.id === id) ? id : null)),
+        CONSTRUCTOR_SLOTS,
+      ),
+    }));
 
-    const padded = (ids: number[], slots: number): (number | null)[] => {
-      const next: (number | null)[] = [...ids];
-      while (next.length < slots) next.push(null);
-      return next.slice(0, slots);
-    };
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration-safe restore
-    setDriverIds(padded(validDriverIds, DRIVER_SLOTS));
-    setConstructorIds(padded(validConstructorIds, CONSTRUCTOR_SLOTS));
+    setStore({ ...saved, teams });
   }, [drivers, constructors]);
 
-  // Save team to localStorage on change
+  // Save on change, but never the initial empty store — it would overwrite the saved one.
+  // Checking the ref alone is not enough: the restore effect sets it and queues setStore in
+  // the same commit, so this effect still sees the initial value on that pass.
   useEffect(() => {
-    const validDriverIds = driverIds.filter((id): id is number => id !== null);
-    const validConstructorIds = constructorIds.filter((id): id is number => id !== null);
-    if (validDriverIds.length === 0 && validConstructorIds.length === 0) return;
-    saveTeam({ driverIds: validDriverIds, constructorIds: validConstructorIds });
-  }, [driverIds, constructorIds]);
+    if (!restoredFromStorage.current) return;
+    if (store === initial.current) return;
+    saveTeams(store);
+  }, [store]);
+
+  const activeTeam = useMemo(
+    () => store.teams.find((t) => t.id === store.activeId) ?? store.teams[0]!,
+    [store],
+  );
+
+  const driverIds = useMemo(() => fitSlots(activeTeam.driverIds, DRIVER_SLOTS), [activeTeam]);
+  const constructorIds = useMemo(() => fitSlots(activeTeam.constructorIds, CONSTRUCTOR_SLOTS), [activeTeam]);
+
+  function updateActiveTeam(patch: Partial<FantasyTeam>) {
+    setStore((prev) => ({
+      ...prev,
+      teams: prev.teams.map((t) => (t.id === prev.activeId ? { ...t, ...patch } : t)),
+    }));
+  }
+
+  function handleAddTeam() {
+    setStore((prev) => {
+      if (prev.teams.length >= MAX_TEAMS) return prev;
+      // Index by length would collide after a delete, so take the first free slot number.
+      let index = 0;
+      while (prev.teams.some((t) => t.id === makeTeam(index).id)) index++;
+      const team = makeTeam(index);
+      return { ...prev, teams: [...prev.teams, team], activeId: team.id };
+    });
+    setRenaming(false);
+    setSuggestionPage(0);
+  }
+
+  function handleDeleteTeam() {
+    setStore((prev) => {
+      if (prev.teams.length <= 1) return prev;
+      const teams = prev.teams.filter((t) => t.id !== prev.activeId);
+      return { ...prev, teams, activeId: teams[0]!.id };
+    });
+    setRenaming(false);
+    setSuggestionPage(0);
+  }
 
   const sortedDrivers = useMemo(
     () => [...drivers].sort((a, b) => a.lastName.localeCompare(b.lastName)),
@@ -89,34 +144,30 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
     return cost;
   }, [driverIds, constructorIds, drivers, constructors]);
 
-  const selectedDriverIdSet = useMemo(() => new Set(driverIds.filter((id): id is number => id !== null)), [driverIds]);
-  const selectedConstructorIdSet = useMemo(() => new Set(constructorIds.filter((id): id is number => id !== null)), [constructorIds]);
+  const selectedDriverIdSet = useMemo(() => new Set(filled(driverIds)), [driverIds]);
+  const selectedConstructorIdSet = useMemo(() => new Set(filled(constructorIds)), [constructorIds]);
 
   const suggestions = useMemo(() => {
-    const validDriverIds = driverIds.filter((id): id is number => id !== null);
-    const validConstructorIds = constructorIds.filter((id): id is number => id !== null);
+    const validDriverIds = filled(driverIds);
+    const validConstructorIds = filled(constructorIds);
     if (validDriverIds.length === 0 && validConstructorIds.length === 0) return [];
-    return getTeamSuggestions(validDriverIds, validConstructorIds, drivers, constructors, remainingBudget);
-  }, [driverIds, constructorIds, drivers, constructors, remainingBudget]);
+    return getTeamSuggestions(validDriverIds, validConstructorIds, drivers, constructors, activeTeam.budget);
+  }, [driverIds, constructorIds, drivers, constructors, activeTeam.budget]);
 
   const totalPages = Math.max(1, Math.ceil(suggestions.length / PAGE_SIZE));
   const pagedSuggestions = suggestions.slice(suggestionPage * PAGE_SIZE, (suggestionPage + 1) * PAGE_SIZE);
 
   function handleDriverChange(slotIndex: number, value: string) {
-    setDriverIds((prev) => {
-      const next = [...prev];
-      next[slotIndex] = value ? parseInt(value, 10) : null;
-      return next;
-    });
+    const next = [...driverIds];
+    next[slotIndex] = value ? parseInt(value, 10) : null;
+    updateActiveTeam({ driverIds: next });
     setSuggestionPage(0);
   }
 
   function handleConstructorChange(slotIndex: number, value: string) {
-    setConstructorIds((prev) => {
-      const next = [...prev];
-      next[slotIndex] = value ? parseInt(value, 10) : null;
-      return next;
-    });
+    const next = [...constructorIds];
+    next[slotIndex] = value ? parseInt(value, 10) : null;
+    updateActiveTeam({ constructorIds: next });
     setSuggestionPage(0);
   }
 
@@ -141,18 +192,78 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
-      {/* Round indicator */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3 flex items-center justify-between">
-        <span className="text-sm font-semibold text-zinc-200">My Team</span>
-        {round > 0 && (
-          <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">Round {round}</span>
-        )}
+      {/* Team switcher */}
+      <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-3 sm:px-4 py-3 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-zinc-200">My Teams</span>
+          {round > 0 && (
+            <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">Round {round}</span>
+          )}
+        </div>
+
+        <div className="flex gap-2 flex-wrap">
+          {store.teams.map((team) => (
+            <button
+              key={team.id}
+              onClick={() => {
+                setStore((prev) => ({ ...prev, activeId: team.id }));
+                setRenaming(false);
+                setSuggestionPage(0);
+              }}
+              className={`min-h-[44px] px-4 rounded-full text-sm font-medium transition-colors ${
+                team.id === store.activeId
+                  ? "bg-red-600 text-white"
+                  : "bg-zinc-800 text-zinc-400 hover:text-zinc-200 active:bg-zinc-700"
+              }`}
+            >
+              {team.name}
+            </button>
+          ))}
+          {store.teams.length < MAX_TEAMS && (
+            <button
+              onClick={handleAddTeam}
+              aria-label="Add team"
+              className="min-h-[44px] w-11 rounded-full text-lg bg-zinc-800 text-zinc-400 hover:text-zinc-200 active:bg-zinc-700 transition-colors"
+            >
+              +
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {renaming ? (
+            <input
+              autoFocus
+              value={activeTeam.name}
+              onChange={(e) => updateActiveTeam({ name: e.target.value })}
+              onBlur={() => setRenaming(false)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setRenaming(false); }}
+              maxLength={24}
+              className="min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
+            />
+          ) : (
+            <button
+              onClick={() => setRenaming(true)}
+              className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 transition-colors"
+            >
+              Rename
+            </button>
+          )}
+          {store.teams.length > 1 && (
+            <button
+              onClick={handleDeleteTeam}
+              className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700 transition-colors"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Team Selection */}
       <CollapsibleSection
         title="Team Selection"
-        info="Select your 5 drivers and 2 constructors. The budget can exceed $100M for simulation purposes. Your team is saved automatically."
+        info="Select your 5 drivers and 2 constructors. The budget can exceed $100M for simulation purposes. Your teams are saved automatically."
         collapsed={teamCollapsed}
         onToggle={() => setTeamCollapsed((v) => !v)}
         headerRight={
@@ -177,7 +288,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
                     <select
                       value={selectedId ?? ""}
                       onChange={(e) => handleDriverChange(i, e.target.value)}
-                      className="flex-1 bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 py-2 border border-zinc-700 focus:border-red-500 focus:outline-none"
+                      className="flex-1 min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
                     >
                       <option value="">Select driver...</option>
                       {sortedDrivers.map((d) => {
@@ -204,7 +315,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
                     <select
                       value={selectedId ?? ""}
                       onChange={(e) => handleConstructorChange(i, e.target.value)}
-                      className="flex-1 bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 py-2 border border-zinc-700 focus:border-red-500 focus:outline-none"
+                      className="flex-1 min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
                     >
                       <option value="">Select constructor...</option>
                       {sortedConstructors.map((c) => {
@@ -225,42 +336,16 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
 
       {/* Remaining Budget */}
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-zinc-200">Remaining Budget</label>
-            <InfoTooltip text="Enter your available budget for swaps. Only upgrades that fit within this budget will be shown. If a driver costs more than your current one, the price difference must fit here." />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-zinc-400 text-sm">$</span>
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              value={remainingBudget}
-              onChange={(e) => {
-                setRemainingBudget(Math.max(0, parseFloat(e.target.value) || 0));
-                setSuggestionPage(0);
-              }}
-              className="w-20 bg-zinc-800 text-zinc-200 text-sm font-mono rounded-lg px-2 py-1.5 border border-zinc-700 focus:border-red-500 focus:outline-none text-right"
-            />
-            <span className="text-zinc-400 text-sm">M</span>
-          </div>
-          <div className="flex gap-1.5">
-            {BUDGET_PRESETS.map((preset) => (
-              <button
-                key={preset}
-                onClick={() => { setRemainingBudget(preset); setSuggestionPage(0); }}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  remainingBudget === preset
-                    ? "bg-red-600 text-white"
-                    : "bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700"
-                }`}
-              >
-                {preset === 0 ? "Free" : `${preset}M`}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-sm font-medium text-zinc-200">Remaining Budget</span>
+          <InfoTooltip text="Your available budget for swaps on this team. Only upgrades that fit within this budget will be shown. If a driver costs more than your current one, the price difference must fit here." />
         </div>
+        <BudgetSlider
+          value={activeTeam.budget}
+          onChange={(budget) => { updateActiveTeam({ budget }); setSuggestionPage(0); }}
+          disabled={false}
+          label={activeTeam.name}
+        />
       </div>
 
       {/* Optimization Suggestions */}

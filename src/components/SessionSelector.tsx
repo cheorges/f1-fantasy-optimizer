@@ -30,7 +30,7 @@ export default function SessionSelector({
           key={session.session_key}
           onClick={() => onSelect(session.session_key)}
           disabled={loading}
-          className={`px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+          className={`min-h-[44px] px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
             selectedKey === session.session_key
               ? "bg-red-600 text-white"
               : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600"

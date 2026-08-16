@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0] - 2026-08-15
+
+First release proper. The 0.x versions were the prototype; this is the app as it is meant
+to be used — on a phone, with a menu, your own teams, and a view on where prices are going.
+
+### Added
+
+- Bottom navigation with three real routes (`/`, `/teams`, `/prices`) — the back button and shareable links now work
+- Budget slider (0.1M–10M) replacing the number field and preset buttons, used on both the home and teams pages
+- Up to three named teams, each with its own remaining budget, switchable by chips
+- Price trend indicator (rising / stable / falling) for drivers and constructors, derived from price and ownership movement across the last three rounds
+- Regression tests for the price trend, the team storage migration, and OpenF1's nullable fields
+
+### Changed
+
+- Shared session and price data moved into an `AppShell` provider in the layout, so both fetches run once per page load instead of once per navigation
+- Home page ranking now states which practice session and which circuit it is based on
+- All touch targets raised to at least 44px (pagination buttons were ~26px, the info button 20px)
+- `viewport` export with `viewportFit: "cover"` so the bottom nav clears the iPhone home indicator
+- Past Fantasy rounds are cached for 30 days instead of 8 hours — the feed freezes them
+- Team storage upgraded to a versioned `TeamStore`; an existing single team is migrated, not discarded
+
+### Fixed
+
+- `/api/drivers` returned 500 for a whole race weekend because OpenF1 sends `null` for `country_code` on every driver and occasionally for a lap's `date_start`, while the schemas required strings. Both fields are unused and are now nullable
+- The two duplicated budget UIs are gone; there is one slider component
+
+### Removed
+
+- `BudgetInput` and `TrainingTab` (absorbed into the home route)
+
 ## [0.4.0] - 2026-05-26
 
 ### Added

@@ -5,6 +5,7 @@ import type {
   Session,
   FantasyDriver,
   FantasyConstructor,
+  PriceTrend,
 } from "./types";
 
 const SESSION_NAME = "Practice 2";
@@ -189,6 +190,9 @@ export function getMockConstructors(): ConstructorAnalysis[] {
   return MOCK_CONSTRUCTORS;
 }
 
+// Cycled so the Trend column shows all four states in mock mode, including "no history".
+const MOCK_TRENDS: (PriceTrend | null)[] = ["up", "flat", "down", null];
+
 export const MOCK_PRICES: { drivers: FantasyDriver[]; constructors: FantasyConstructor[]; round: number } = {
   round: 1,
   drivers: MOCK_DRIVERS.map((d, i) => ({
@@ -202,6 +206,7 @@ export const MOCK_PRICES: { drivers: FantasyDriver[]; constructors: FantasyConst
     overallPoints: d.overallPoints!,
     gamedayPoints: 0,
     priceChange: d.priceChange!,
+    trend: MOCK_TRENDS[i % MOCK_TRENDS.length]!,
   })),
   constructors: MOCK_CONSTRUCTORS.map((c, i) => ({
     id: 100 + i,
@@ -211,5 +216,6 @@ export const MOCK_PRICES: { drivers: FantasyDriver[]; constructors: FantasyConst
     overallPoints: c.overallPoints!,
     gamedayPoints: 0,
     priceChange: c.priceChange!,
+    trend: MOCK_TRENDS[i % MOCK_TRENDS.length]!,
   })),
 };

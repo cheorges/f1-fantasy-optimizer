@@ -107,6 +107,8 @@ function parseDriver(raw: RawFantasyPlayer): FantasyDriver {
     overallPoints: toNumber(raw.OverallPpints),
     gamedayPoints: toNumber(raw.GamedayPoints),
     priceChange: raw.Value - raw.OldPlayerValue,
+    // Needs several rounds of history, so it's filled in by the route, not the feed parser.
+    trend: null,
   };
 }
 
@@ -119,12 +121,15 @@ function parseConstructor(raw: RawFantasyPlayer): FantasyConstructor {
     overallPoints: toNumber(raw.OverallPpints),
     gamedayPoints: toNumber(raw.GamedayPoints),
     priceChange: raw.Value - raw.OldPlayerValue,
+    trend: null,
   };
 }
 
-export async function getFantasyData(): Promise<FantasyData> {
-  const round = await getCurrentRound();
+// Past rounds are frozen snapshots — the feed never rewrites them, so they can be held
+// far longer than the live round.
+export const PAST_ROUND_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
+export async function fetchRound(round: number, ttlMs: number = CACHE_TTL_MS): Promise<FantasyData> {
   return getOrFetch(
     `fantasy:data:${round}`,
     async () => {
@@ -144,8 +149,12 @@ export async function getFantasyData(): Promise<FantasyData> {
 
       return { drivers, constructors, round };
     },
-    CACHE_TTL_MS,
+    ttlMs,
   );
+}
+
+export async function getFantasyData(): Promise<FantasyData> {
+  return fetchRound(await getCurrentRound());
 }
 
 export async function getDriverPrices(): Promise<Map<string, FantasyDriver>> {
