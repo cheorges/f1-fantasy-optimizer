@@ -1,11 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { Session, Meeting, FantasyDriver, FantasyConstructor } from "@/lib/types";
 import type { SessionsResponse, PricesResponse } from "@/lib/api-types";
-import { getLiveSessionMessage } from "@/lib/live-session";
+import { isSessionsResponse } from "@/lib/api-types";
+import { getLiveSessionMessage, RETRY_INTERVAL_MS, type StaleState } from "@/lib/live-session";
+import { readCache, writeCache } from "@/lib/browser-cache";
 import BottomNav from "@/components/BottomNav";
+import StaleDataBanner from "@/components/StaleDataBanner";
 
 interface AppData {
   meeting: Meeting | null;
@@ -16,7 +19,8 @@ interface AppData {
   priceRound: number;
   loadingPrices: boolean;
   setError: (message: string | null) => void;
-  showToast: (message: string) => void;
+  // Set while /api/sessions is blocked. Consumers use it to avoid stacking a second banner.
+  staleSessions: StaleState | null;
 }
 
 const AppDataContext = createContext<AppData | null>(null);
@@ -34,8 +38,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [staleSessions, setStaleSessions] = useState<StaleState | null>(null);
+  const [sessionsRetry, setSessionsRetry] = useState(0);
 
   const [priceDrivers, setPriceDrivers] = useState<FantasyDriver[]>([]);
   const [priceConstructors, setPriceConstructors] = useState<FantasyConstructor[]>([]);
@@ -44,31 +48,28 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // cold load must show a spinner rather than the "no data" branch until the fetch settles.
   const [loadingPrices, setLoadingPrices] = useState(true);
 
-  const showToast = useCallback((message: string) => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast(message);
-    toastTimer.current = setTimeout(() => setToast(null), 5000);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    };
-  }, []);
-
   useEffect(() => {
     async function fetchSessions() {
       try {
         const res = await fetch("/api/sessions");
         const liveMessage = await getLiveSessionMessage(res);
         if (liveMessage) {
-          showToast(liveMessage);
+          // Blocked upstream. Fall back to whatever this device saw last, so the home page
+          // shows the previous session instead of nothing.
+          const cached = readCache<SessionsResponse>("sessions", isSessionsResponse);
+          if (cached) {
+            setMeeting(cached.data.meeting);
+            setSessions(cached.data.sessions);
+          }
+          setStaleSessions({ message: liveMessage, savedAt: cached?.savedAt ?? null });
           return;
         }
         if (!res.ok) throw new Error("Failed to load sessions");
         const data: SessionsResponse = await res.json();
         setMeeting(data.meeting);
         setSessions(data.sessions);
+        writeCache("sessions", data);
+        setStaleSessions(null);
         setError(null);
       } catch (err) {
         setError(String(err));
@@ -77,18 +78,24 @@ export default function AppShell({ children }: { children: ReactNode }) {
       }
     }
     fetchSessions();
-  }, [showToast]);
+  }, [sessionsRetry]);
 
+  // Only while blocked. Guarding on the boolean rather than the object keeps the interval
+  // on a steady cadence instead of restarting it after every failed attempt.
+  const sessionsBlocked = staleSessions !== null;
+  useEffect(() => {
+    if (!sessionsBlocked) return;
+    const id = setInterval(() => setSessionsRetry((n) => n + 1), RETRY_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [sessionsBlocked]);
+
+  // Prices come from the Fantasy feed and the race calendar, never from OpenF1, so a live
+  // session cannot block them — no cache fallback needed here.
   useEffect(() => {
     async function fetchPrices() {
       setLoadingPrices(true);
       try {
         const res = await fetch("/api/prices");
-        const liveMessage = await getLiveSessionMessage(res);
-        if (liveMessage) {
-          showToast(liveMessage);
-          return;
-        }
         if (!res.ok) throw new Error("Failed to load prices");
         const data: PricesResponse = await res.json();
         setPriceDrivers(data.drivers);
@@ -102,7 +109,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       }
     }
     fetchPrices();
-  }, [showToast]);
+  }, []);
 
   return (
     <AppDataContext.Provider
@@ -115,7 +122,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         priceRound,
         loadingPrices,
         setError,
-        showToast,
+        staleSessions,
       }}
     >
       <div className="min-h-screen">
@@ -134,12 +141,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {toast && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] bg-amber-900/90 border border-amber-700 rounded-lg px-4 py-3 text-amber-200 text-sm shadow-lg animate-fade-in">
-            {toast}
-          </div>
-        )}
-
         <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] flex flex-col gap-4 sm:gap-6">
           {error && (
             <div className="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300">
@@ -147,6 +148,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
               <p className="mt-2 text-xs text-red-400">This app uses the free tier of the F1 APIs which have rate limits. Please reload the page and try again.</p>
             </div>
           )}
+
+          {staleSessions && <StaleDataBanner savedAt={staleSessions.savedAt} />}
 
           {children}
 
