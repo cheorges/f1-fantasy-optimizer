@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>F1 Fantasy Optimizer</title>
+  <rect width="512" height="512" rx="112" fill="#09090b"/>
+  <g transform="rotate(-12 256 256)">
+    <g transform="translate(64 142)">
+      <rect x="0"   y="0"   width="96" height="76" fill="#ef4444"/>
+      <rect x="192" y="0"   width="96" height="76" fill="#fafafa"/>
+      <rect x="96"  y="76"  width="96" height="76" fill="#fafafa"/>
+      <rect x="288" y="76"  width="96" height="76" fill="#fafafa"/>
+      <rect x="0"   y="152" width="96" height="76" fill="#ef4444"/>
+      <rect x="192" y="152" width="96" height="76" fill="#fafafa"/>
+    </g>
+  </g>
+</svg>
