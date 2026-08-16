@@ -1,10 +1,16 @@
 import { z } from "zod";
-import { getOrFetch } from "./cache";
+import { getCached, getOrFetch, setCache } from "./cache";
 import { fetchWithRetry } from "./http";
 import type { Session, Lap, Driver, DriverPerformance, Meeting } from "./types";
 
 const BASE_URL = "https://api.openf1.org/v1";
 const CACHE_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+// A live session blocks every OpenF1 call for its whole duration, and the answer is the
+// same every time. Remembering the 401 briefly means one probe per minute for all clients
+// instead of three upstream calls per client per retry.
+const LIVE_SESSION_KEY = "openf1:live-session";
+const LIVE_SESSION_TTL_MS = 60 * 1000;
 
 export class OpenF1LiveSessionError extends Error {
   constructor() {
@@ -80,6 +86,11 @@ async function fetchJson<T>(
   params: Record<string, string>,
   schema: z.ZodType<T>,
 ): Promise<T> {
+  // Already known to be blocked — don't spend an upstream call to be told again.
+  if (getCached<boolean>(LIVE_SESSION_KEY)) {
+    throw new OpenF1LiveSessionError();
+  }
+
   const url = new URL(`${BASE_URL}${path}`);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
@@ -89,6 +100,7 @@ async function fetchJson<T>(
   // OpenF1's free tier returns 401 specifically while a session is live, not as a
   // generic auth error — surface it as the live-session signal so the UI can react.
   if (response.status === 401) {
+    setCache(LIVE_SESSION_KEY, true, LIVE_SESSION_TTL_MS);
     throw new OpenF1LiveSessionError();
   }
   if (!response.ok) {

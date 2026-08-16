@@ -8,7 +8,6 @@ import { isSessionsResponse } from "@/lib/api-types";
 import { getLiveSessionMessage, RETRY_INTERVAL_MS, type StaleState } from "@/lib/live-session";
 import { readCache, writeCache } from "@/lib/browser-cache";
 import BottomNav from "@/components/BottomNav";
-import StaleDataBanner from "@/components/StaleDataBanner";
 
 interface AppData {
   meeting: Meeting | null;
@@ -19,7 +18,7 @@ interface AppData {
   priceRound: number;
   loadingPrices: boolean;
   setError: (message: string | null) => void;
-  // Set while /api/sessions is blocked. Consumers use it to avoid stacking a second banner.
+  // Set while /api/sessions is blocked, so the home page can explain what it is showing.
   staleSessions: StaleState | null;
 }
 
@@ -61,7 +60,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             setMeeting(cached.data.meeting);
             setSessions(cached.data.sessions);
           }
-          setStaleSessions({ message: liveMessage, savedAt: cached?.savedAt ?? null });
+          setStaleSessions({ savedAt: cached?.savedAt ?? null });
           return;
         }
         if (!res.ok) throw new Error("Failed to load sessions");
@@ -149,8 +148,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          {staleSessions && <StaleDataBanner savedAt={staleSessions.savedAt} />}
-
+          {/* The banner is rendered by the home page, not here: only practice data is ever
+              blocked, and the page knows which of the two cache entries is actually on
+              screen, so it can name the right timestamp. */}
           {children}
 
           <p className="text-center text-xs text-zinc-600">
