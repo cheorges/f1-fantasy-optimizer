@@ -435,38 +435,6 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
           </div>
       </CollapsibleSection>
 
-      {/* Budget correction */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-medium text-zinc-200">Budget Correction</span>
-          <InfoTooltip text="The official game caps your team at $100M based on what you paid. This app only sees today's prices, so a squad whose drivers gained value looks more expensive than it was. Set this to the difference until the figure above matches what the official app shows you — the remaining budget, and the upgrade suggestions, then follow from it and stay right as you swap." />
-        </div>
-        <BudgetSlider
-          value={activeTeam.budgetCorrection}
-          onChange={(budgetCorrection) => { updateActiveTeam({ budgetCorrection }); setSuggestionPage(0); }}
-          disabled={false}
-          label="Value gained since purchase"
-          min={CORRECTION_MIN}
-          max={CORRECTION_MAX}
-        />
-        <div className="mt-3 pt-3 border-t border-zinc-800 grid grid-cols-3 gap-2 text-xs">
-          <div>
-            <div className="text-zinc-500">Market value</div>
-            <div className="text-zinc-300 font-mono">{formatPrice(teamCost)}</div>
-          </div>
-          <div>
-            <div className="text-zinc-500">Effectively spent</div>
-            <div className="text-zinc-300 font-mono">{formatPrice(effectiveCost)}</div>
-          </div>
-          <div>
-            <div className="text-zinc-500">Remaining</div>
-            <div className={`font-mono ${remainingBudget < 0 ? "text-amber-400" : "text-emerald-400"}`}>
-              {formatPrice(remainingBudget)}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Optimization Suggestions */}
       <CollapsibleSection
         title="Upgrade Suggestions"
@@ -480,13 +448,46 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
         }
       >
           <div className="p-3 sm:p-4">
-            <div className="pb-3 mb-3 border-b border-zinc-800">
+            {/* The two controls that shape this list live with it: the correction only
+                exists so the budget below is right, and the budget decides what is listed. */}
+            <div className="pb-4 mb-4 border-b border-zinc-800 flex flex-col gap-4">
               <ToggleSwitch
                 checked={includePractice}
                 onChange={(v) => { setIncludePractice(v); setSuggestionPage(0); }}
                 label="Include FP"
                 hint="Also list drivers who were quicker in practice, not only higher on points"
               />
+
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm text-zinc-200">Budget Correction</span>
+                  <InfoTooltip text="The official game caps your team at $100M based on what you paid. This app only sees today's prices, so a squad whose drivers gained value looks more expensive than it was. Set this to the difference until 'Effectively spent' matches what the official app shows you — the remaining budget, and these suggestions, then follow from it and stay right as you swap." />
+                </div>
+                <BudgetSlider
+                  value={activeTeam.budgetCorrection}
+                  onChange={(budgetCorrection) => { updateActiveTeam({ budgetCorrection }); setSuggestionPage(0); }}
+                  disabled={false}
+                  label="Value gained since purchase"
+                  min={CORRECTION_MIN}
+                  max={CORRECTION_MAX}
+                />
+                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <div className="text-zinc-500">Market value</div>
+                    <div className="text-zinc-300 font-mono">{formatPrice(teamCost)}</div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-500">Effectively spent</div>
+                    <div className="text-zinc-300 font-mono">{formatPrice(effectiveCost)}</div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-500">Remaining</div>
+                    <div className={`font-mono ${remainingBudget < 0 ? "text-amber-400" : "text-emerald-400"}`}>
+                      {formatPrice(remainingBudget)}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             {includePractice && practiceState !== "ready" && (
               <div className="mb-3 text-xs text-zinc-500">
