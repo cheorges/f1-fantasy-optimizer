@@ -511,8 +511,8 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
             ) : (
               <>
                 <div className="flex flex-col gap-3">
-                  {pagedSuggestions.map((s, i) => (
-                    <SuggestionCard key={`${s.current.id}-${s.upgrade.id}`} suggestion={s} index={suggestionPage * PAGE_SIZE + i} />
+                  {pagedSuggestions.map((s) => (
+                    <SuggestionCard key={`${s.type}-${s.current.id}-${s.upgrade.id}`} suggestion={s} />
                   ))}
                 </div>
                 <Pagination
@@ -531,77 +531,65 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   );
 }
 
-function SuggestionCard({ suggestion, index }: { suggestion: PointsSwapSuggestion; index: number }) {
-  const { current, upgrade, pointsDelta, priceDelta, type, timeDelta, qualifiedBy } = suggestion;
+function SuggestionCard({ suggestion }: { suggestion: PointsSwapSuggestion }) {
+  const { current, upgrade, pointsDelta, priceDelta, timeDelta, qualifiedBy } = suggestion;
+
+  // For constructors the name and the team are the same string, so the second line would
+  // just repeat the first.
+  const side = (p: typeof current, tone: string, align: string) => (
+    <div className={`min-w-0 ${align}`}>
+      <div className={`font-medium truncate ${tone}`}>
+        <span className="sm:hidden">{p.short}</span>
+        <span className="hidden sm:inline">{p.name}</span>
+      </div>
+      {p.teamName !== p.name && (
+        <div className="text-xs text-zinc-500 truncate">{p.teamName}</div>
+      )}
+      <div className="text-xs text-zinc-400 font-mono mt-1 truncate">
+        {p.overallPoints} pts · {formatPrice(p.price)}
+      </div>
+    </div>
+  );
+
+  const badge =
+    qualifiedBy === "pace"
+      ? { label: "Faster in practice", className: "bg-sky-900/50 text-sky-300" }
+      : qualifiedBy === "both"
+        ? { label: "Points + practice", className: "bg-emerald-900/50 text-emerald-300" }
+        : { label: "More points", className: "bg-zinc-700/50 text-zinc-400" };
 
   return (
     <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors">
-      {/* Stacked on a phone so the names get the full width — with three stats beside them
-          they were truncated to "Alexand..." */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <span className="text-zinc-600 text-sm font-mono w-6 shrink-0">
-            #{index + 1}
-          </span>
-
-          {/* Current */}
-          <div className="min-w-0">
-            <div className="font-medium text-red-400 truncate">
-              <span className="sm:hidden">{current.short}</span>
-              <span className="hidden sm:inline">{current.name}</span>
-            </div>
-            <div className="text-xs text-zinc-500 truncate">{current.teamName}</div>
-          </div>
-
-          <div className="text-zinc-500 shrink-0 px-1">→</div>
-
-          {/* Upgrade */}
-          <div className="min-w-0">
-            <div className="font-medium text-emerald-400 truncate">
-              <span className="sm:hidden">{upgrade.short}</span>
-              <span className="hidden sm:inline">{upgrade.name}</span>
-            </div>
-            <div className="text-xs text-zinc-500 truncate">{upgrade.teamName}</div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="flex flex-row flex-wrap gap-4 sm:gap-4 shrink-0 sm:text-right">
-          <div>
-            <div className="text-xs text-zinc-500">Points</div>
-            <div className={`text-sm font-mono ${pointsDelta > 0 ? "text-emerald-400" : "text-zinc-500"}`}>
-              {pointsDelta > 0 ? "+" : ""}{pointsDelta} pts
-            </div>
-          </div>
-          {timeDelta !== undefined && (
-            <div>
-              <div className="text-xs text-zinc-500">Practice</div>
-              <div className="text-sm font-mono text-emerald-400">-{timeDelta.toFixed(3)}s</div>
-            </div>
-          )}
-          <div>
-            <div className="text-xs text-zinc-500">Cost</div>
-            <div className={`text-sm font-mono ${priceDelta <= 0 ? "text-emerald-400" : "text-yellow-400"}`}>
-              {priceDelta <= 0 ? "" : "+"}{priceDelta.toFixed(1)}M
-            </div>
-          </div>
-        </div>
+      {/* Who for whom. The absolute figures sit with the person they describe, so the
+          deltas below are the only place a number is stated twice — as a difference. */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+        {side(current, "text-red-400", "text-left")}
+        <div className="text-zinc-600 pt-0.5">→</div>
+        {side(upgrade, "text-emerald-400", "text-right")}
       </div>
 
-      {/* Detail line */}
-      <div className="mt-3 flex gap-3 sm:gap-6 flex-wrap text-xs text-zinc-500">
-        <span className="px-1.5 py-0.5 rounded text-xs bg-zinc-700/50 text-zinc-400">
-          {type === "driver" ? "Driver" : "Constructor"}
+      <div className="mt-3 pt-3 border-t border-zinc-700/50 flex items-center gap-4 flex-wrap">
+        <Delta label="Points" value={`${pointsDelta > 0 ? "+" : ""}${pointsDelta}`} unit="pts"
+          tone={pointsDelta > 0 ? "text-emerald-400" : "text-zinc-500"} />
+        {timeDelta !== undefined && (
+          <Delta label="Practice" value={`-${timeDelta.toFixed(3)}`} unit="s" tone="text-emerald-400" />
+        )}
+        <Delta label="Cost" value={`${priceDelta <= 0 ? "" : "+"}${priceDelta.toFixed(1)}`} unit="M"
+          tone={priceDelta <= 0 ? "text-emerald-400" : "text-yellow-400"} />
+        <span className={`ml-auto px-2 py-0.5 rounded text-xs shrink-0 ${badge.className}`}>
+          {badge.label}
         </span>
-        <span className={`px-1.5 py-0.5 rounded text-xs ${
-          qualifiedBy === "pace" ? "bg-sky-900/50 text-sky-300"
-            : qualifiedBy === "both" ? "bg-emerald-900/50 text-emerald-300"
-            : "bg-zinc-700/50 text-zinc-400"
-        }`}>
-          {qualifiedBy === "pace" ? "Faster in practice" : qualifiedBy === "both" ? "Points + practice" : "More points"}
-        </span>
-        <span>{current.name}: {current.overallPoints} pts / {formatPrice(current.price)}</span>
-        <span>{upgrade.name}: {upgrade.overallPoints} pts / {formatPrice(upgrade.price)}</span>
+      </div>
+    </div>
+  );
+}
+
+function Delta({ label, value, unit, tone }: { label: string; value: string; unit: string; tone: string }) {
+  return (
+    <div className="leading-tight">
+      <div className="text-[10px] uppercase tracking-wide text-zinc-600">{label}</div>
+      <div className={`font-mono text-base ${tone}`}>
+        {value}<span className="text-xs text-zinc-500 ml-0.5">{unit}</span>
       </div>
     </div>
   );
