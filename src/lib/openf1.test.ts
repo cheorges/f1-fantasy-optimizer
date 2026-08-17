@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { findBestLap, findBestSectors, findTopSpeed, getSessionDrivers, getSessionLaps } from "./openf1";
+import { findBestLap, findBestSectors, findTopSpeed, getSessionDrivers, getSessionLaps, OpenF1LiveSessionError } from "./openf1";
 import { clearCache } from "./cache";
 import type { Lap } from "./types";
 
@@ -124,5 +124,41 @@ describe("feed tolerance for nulls", () => {
     const laps = await getSessionLaps(11337);
     expect(laps).toHaveLength(1);
     expect(laps[0]!.date_start).toBeNull();
+  });
+});
+
+// A live session blocks every endpoint for its whole duration. Without remembering the
+// 401, each client's retry costs three upstream calls that can only fail.
+describe("live-session back-off", () => {
+  beforeEach(() => {
+    clearCache();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("stops calling upstream once a 401 has been seen", async () => {
+    const fetchSpy = vi.fn(async () => new Response("", { status: 401 }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(getSessionLaps(1)).rejects.toBeInstanceOf(OpenF1LiveSessionError);
+    await expect(getSessionDrivers(1)).rejects.toBeInstanceOf(OpenF1LiveSessionError);
+    await expect(getSessionLaps(2)).rejects.toBeInstanceOf(OpenF1LiveSessionError);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes back upstream once the back-off has expired", async () => {
+    vi.useFakeTimers();
+    const fetchSpy = vi.fn(async () => new Response("", { status: 401 }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(getSessionLaps(1)).rejects.toBeInstanceOf(OpenF1LiveSessionError);
+    vi.advanceTimersByTime(61_000);
+    await expect(getSessionLaps(1)).rejects.toBeInstanceOf(OpenF1LiveSessionError);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 });

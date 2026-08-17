@@ -3,9 +3,12 @@
 import { useState, useEffect, useMemo } from "react";
 import type { DriverAnalysis, ConstructorAnalysis } from "@/lib/types";
 import type { DriversResponse } from "@/lib/api-types";
+import { isDriversResponse } from "@/lib/api-types";
 import { generateRecommendations, generateConstructorRecommendations } from "@/lib/swaps";
-import { getLiveSessionMessage } from "@/lib/live-session";
+import { getLiveSessionMessage, RETRY_INTERVAL_MS, type StaleState } from "@/lib/live-session";
+import { readCache, writeCache } from "@/lib/browser-cache";
 import { useAppData } from "@/components/AppShell";
+import StaleDataBanner from "@/components/StaleDataBanner";
 import SessionSelector from "@/components/SessionSelector";
 import DriverTable, { COLUMN_OPTIONS, type DriverColumn } from "@/components/DriverTable";
 import BudgetSlider from "@/components/BudgetSlider";
@@ -18,7 +21,7 @@ import Pagination from "@/components/Pagination";
 const PAGE_SIZE = 10;
 
 export default function Home() {
-  const { sessions, loadingSessions, meeting, priceRound, setError, showToast } = useAppData();
+  const { sessions, loadingSessions, meeting, priceRound, setError, staleSessions } = useAppData();
 
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
   const [drivers, setDrivers] = useState<DriverAnalysis[]>([]);
@@ -31,10 +34,19 @@ export default function Home() {
   const [visibleColumns, setVisibleColumns] = useState<Set<DriverColumn>>(new Set());
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [staleDrivers, setStaleDrivers] = useState<StaleState | null>(null);
+  const [driversRetry, setDriversRetry] = useState(0);
 
+  // The sessions list can be replaced after the fact — the cache may restore a previous
+  // race weekend's list, and the retry then swaps in the current one. Keeping the previous
+  // pick only makes sense while it still exists in the new list.
   useEffect(() => {
     if (sessions.length === 0) return;
-    setSelectedSession((prev) => prev ?? sessions[sessions.length - 1]!.session_key);
+    setSelectedSession((prev) =>
+      prev !== null && sessions.some((s) => s.session_key === prev)
+        ? prev
+        : sessions[sessions.length - 1]!.session_key,
+    );
   }, [sessions]);
 
   useEffect(() => {
@@ -51,8 +63,16 @@ export default function Home() {
         if (cancelled) return;
 
         const liveMessage = await getLiveSessionMessage(res);
+        if (cancelled) return;
+
         if (liveMessage) {
-          showToast(liveMessage);
+          // Blocked upstream. Show what this device last saw for this session rather than
+          // an empty table — but only for this session: leaving another session's rows on
+          // screen would label them with the session the user just picked.
+          const cached = readCache<DriversResponse>(`drivers:${selectedSession}`, isDriversResponse);
+          setDrivers(cached?.data.drivers ?? []);
+          setConstructors(cached?.data.constructors ?? []);
+          setStaleDrivers({ savedAt: cached?.savedAt ?? null });
           return;
         }
         if (!res.ok) throw new Error("Failed to load driver data");
@@ -62,6 +82,8 @@ export default function Home() {
 
         setDrivers(data.drivers);
         setConstructors(data.constructors);
+        writeCache(`drivers:${selectedSession}`, data);
+        setStaleDrivers(null);
       } catch (err) {
         if (!cancelled) setError(String(err));
       } finally {
@@ -71,7 +93,15 @@ export default function Home() {
 
     loadDrivers();
     return () => { cancelled = true; };
-  }, [selectedSession, setError, showToast]);
+  }, [selectedSession, driversRetry, setError]);
+
+  // Only while blocked, and on a steady cadence — see the same pattern in AppShell.
+  const driversBlocked = staleDrivers !== null;
+  useEffect(() => {
+    if (!driversBlocked) return;
+    const id = setInterval(() => setDriversRetry((n) => n + 1), RETRY_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [driversBlocked]);
 
   const recommendations = useMemo(
     () => generateRecommendations(drivers, budget),
@@ -205,6 +235,13 @@ export default function Home() {
 
   return (
     <>
+      {/* One banner, even when both fetches are blocked. The driver timestamp wins because
+          the table is what the reader is looking at; the session list only matters when the
+          drivers fetch never got far enough to have its own. */}
+      {(staleDrivers || staleSessions) && (
+        <StaleDataBanner savedAt={staleDrivers?.savedAt ?? staleSessions?.savedAt ?? null} />
+      )}
+
       {/* Which practice data the ranking is based on, and from where */}
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-3 sm:px-4 py-3 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
