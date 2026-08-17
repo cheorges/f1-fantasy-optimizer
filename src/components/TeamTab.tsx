@@ -41,6 +41,9 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   const initial = useRef<TeamStore>(initialStore());
   const [store, setStore] = useState<TeamStore>(initial.current);
   const [renaming, setRenaming] = useState(false);
+  // Deleting a team throws away a line-up the user typed in by hand, and it cannot be
+  // undone — so the button asks first instead of acting on the tap.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [teamCollapsed, setTeamCollapsed] = useState(false);
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
   const [suggestionPage, setSuggestionPage] = useState(0);
@@ -106,6 +109,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       return { ...prev, teams: [...prev.teams, team], activeId: team.id };
     });
     setRenaming(false);
+    setConfirmDelete(false);
     setSuggestionPage(0);
   }
 
@@ -116,6 +120,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       return { ...prev, teams, activeId: teams[0]!.id };
     });
     setRenaming(false);
+    setConfirmDelete(false);
     setSuggestionPage(0);
   }
 
@@ -208,6 +213,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
               onClick={() => {
                 setStore((prev) => ({ ...prev, activeId: team.id }));
                 setRenaming(false);
+                setConfirmDelete(false);
                 setSuggestionPage(0);
               }}
               className={`min-h-[44px] px-4 rounded-full text-sm font-medium transition-colors ${
@@ -243,19 +249,42 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
             />
           ) : (
             <button
-              onClick={() => setRenaming(true)}
+              onClick={() => { setRenaming(true); setConfirmDelete(false); }}
               className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 transition-colors"
             >
               Rename
             </button>
           )}
           {store.teams.length > 1 && (
-            <button
-              onClick={handleDeleteTeam}
-              className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700 transition-colors"
-            >
-              Delete
-            </button>
+            confirmDelete ? (
+              // Asked inline rather than through window.confirm: a native dialog blocks the
+              // page, looks nothing like the rest of the app, and is awkward on a phone.
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-zinc-400">
+                  Delete <span className="text-zinc-200 font-medium">{activeTeam.name}</span>?
+                </span>
+                <button
+                  onClick={handleDeleteTeam}
+                  className="min-h-[44px] px-3 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-500 active:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
+                <button
+                  autoFocus
+                  onClick={() => setConfirmDelete(false)}
+                  className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-700 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700 transition-colors"
+              >
+                Delete
+              </button>
+            )
           )}
         </div>
       </div>
