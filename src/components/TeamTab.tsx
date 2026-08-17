@@ -8,6 +8,7 @@ import CollapsibleSection from "@/components/CollapsibleSection";
 import Pagination from "@/components/Pagination";
 import BudgetSlider from "@/components/BudgetSlider";
 import InfoTooltip from "@/components/InfoTooltip";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface TeamTabProps {
   drivers: FantasyDriver[];
@@ -41,8 +42,11 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   const initial = useRef<TeamStore>(initialStore());
   const [store, setStore] = useState<TeamStore>(initial.current);
   const [renaming, setRenaming] = useState(false);
+  // The edit is held here, not written straight to the store, so Cancel can actually
+  // discard it rather than leaving whatever was typed behind.
+  const [nameDraft, setNameDraft] = useState("");
   // Deleting a team throws away a line-up the user typed in by hand, and it cannot be
-  // undone — so the button asks first instead of acting on the tap.
+  // undone — so it asks first instead of acting on the tap.
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [teamCollapsed, setTeamCollapsed] = useState(false);
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
@@ -111,6 +115,20 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
     setRenaming(false);
     setConfirmDelete(false);
     setSuggestionPage(0);
+  }
+
+  function startRename() {
+    setNameDraft(activeTeam.name);
+    setRenaming(true);
+    setConfirmDelete(false);
+  }
+
+  function saveRename() {
+    // An empty name would leave an unlabelled chip with no way to tell teams apart,
+    // so a blank entry keeps the previous one.
+    const next = nameDraft.trim();
+    if (next) updateActiveTeam({ name: next });
+    setRenaming(false);
   }
 
   function handleDeleteTeam() {
@@ -197,6 +215,16 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete this team?"
+          body={<><span className="text-zinc-200 font-medium">{activeTeam.name}</span> and its line-up will be removed. This cannot be undone.</>}
+          confirmLabel="Delete"
+          onConfirm={handleDeleteTeam}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
       {/* Team switcher */}
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-3 sm:px-4 py-3 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
@@ -236,55 +264,53 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
           )}
         </div>
 
+        {/* Renaming replaces both buttons: while an edit is pending there is nothing to
+            delete yet, and a Delete sitting next to a half-typed name is a mis-tap. */}
         <div className="flex items-center gap-2 flex-wrap">
           {renaming ? (
-            <input
-              autoFocus
-              value={activeTeam.name}
-              onChange={(e) => updateActiveTeam({ name: e.target.value })}
-              onBlur={() => setRenaming(false)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setRenaming(false); }}
-              maxLength={24}
-              className="min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
-            />
+            <>
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveRename();
+                  if (e.key === "Escape") setRenaming(false);
+                }}
+                maxLength={24}
+                aria-label="Team name"
+                className="min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
+              />
+              <button
+                onClick={saveRename}
+                className="min-h-[44px] px-3 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-500 active:bg-red-700 transition-colors"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setRenaming(false)}
+                className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-700 transition-colors"
+              >
+                Cancel
+              </button>
+            </>
           ) : (
-            <button
-              onClick={() => { setRenaming(true); setConfirmDelete(false); }}
-              className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 transition-colors"
-            >
-              Rename
-            </button>
-          )}
-          {store.teams.length > 1 && (
-            confirmDelete ? (
-              // Asked inline rather than through window.confirm: a native dialog blocks the
-              // page, looks nothing like the rest of the app, and is awkward on a phone.
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-zinc-400">
-                  Delete <span className="text-zinc-200 font-medium">{activeTeam.name}</span>?
-                </span>
+            <>
+              <button
+                onClick={startRename}
+                className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 transition-colors"
+              >
+                Rename
+              </button>
+              {store.teams.length > 1 && (
                 <button
-                  onClick={handleDeleteTeam}
-                  className="min-h-[44px] px-3 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-500 active:bg-red-700 transition-colors"
+                  onClick={() => setConfirmDelete(true)}
+                  className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700 transition-colors"
                 >
                   Delete
                 </button>
-                <button
-                  autoFocus
-                  onClick={() => setConfirmDelete(false)}
-                  className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-700 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700 transition-colors"
-              >
-                Delete
-              </button>
-            )
+              )}
+            </>
           )}
         </div>
       </div>
