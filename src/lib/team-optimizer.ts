@@ -118,6 +118,7 @@ export function getTeamSuggestions(
         current: {
           id: current.id,
           name: `${current.firstName} ${current.lastName}`,
+          short: current.tla.toUpperCase(),
           teamName: current.teamName,
           price: current.price,
           overallPoints: current.overallPoints,
@@ -125,6 +126,7 @@ export function getTeamSuggestions(
         upgrade: {
           id: candidate.id,
           name: `${candidate.firstName} ${candidate.lastName}`,
+          short: candidate.tla.toUpperCase(),
           teamName: candidate.teamName,
           price: candidate.price,
           overallPoints: candidate.overallPoints,
@@ -150,6 +152,7 @@ export function getTeamSuggestions(
         current: {
           id: current.id,
           name: current.name,
+          short: current.name,
           teamName: current.name,
           price: current.price,
           overallPoints: current.overallPoints,
@@ -157,6 +160,7 @@ export function getTeamSuggestions(
         upgrade: {
           id: candidate.id,
           name: candidate.name,
+          short: candidate.name,
           teamName: candidate.name,
           price: candidate.price,
           overallPoints: candidate.overallPoints,
@@ -209,8 +213,8 @@ export function mergePracticeSwaps(
 
     const candidate: PointsSwapSuggestion = {
       type,
-      current: { id: from.id, name: label(from), teamName: teamOf(from), price: from.price, overallPoints: from.overallPoints },
-      upgrade: { id: to.id, name: label(to), teamName: teamOf(to), price: to.price, overallPoints: to.overallPoints },
+      current: { id: from.id, name: label(from), short: shortOf(from), teamName: teamOf(from), price: from.price, overallPoints: from.overallPoints },
+      upgrade: { id: to.id, name: label(to), short: shortOf(to), teamName: teamOf(to), price: to.price, overallPoints: to.overallPoints },
       pointsDelta: to.overallPoints - from.overallPoints,
       priceDelta: to.price - from.price,
       timeDelta,
@@ -227,6 +231,8 @@ export function mergePracticeSwaps(
 
   const driverName = (p: FantasyDriver | FantasyConstructor) =>
     "firstName" in p ? `${p.firstName} ${p.lastName}` : p.name;
+  const shortOf = (p: FantasyDriver | FantasyConstructor) =>
+    "tla" in p ? p.tla.toUpperCase() : p.name;
 
   for (const swap of driverSwaps) {
     add(

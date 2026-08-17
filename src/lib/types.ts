@@ -174,8 +174,10 @@ export interface TeamStore {
 
 export interface PointsSwapSuggestion {
   type: "driver" | "constructor";
-  current: { id: number; name: string; teamName: string; price: number; overallPoints: number };
-  upgrade: { id: number; name: string; teamName: string; price: number; overallPoints: number };
+  // `short` is the three-letter acronym for drivers, the plain name for constructors —
+  // what the card shows on a phone, where a full name has nowhere to go.
+  current: { id: number; name: string; short: string; teamName: string; price: number; overallPoints: number };
+  upgrade: { id: number; name: string; short: string; teamName: string; price: number; overallPoints: number };
   pointsDelta: number;
   priceDelta: number;
   // Seconds the replacement was quicker in the practice session, when practice data is

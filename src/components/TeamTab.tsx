@@ -14,6 +14,7 @@ import CollapsibleSection from "@/components/CollapsibleSection";
 import Pagination from "@/components/Pagination";
 import BudgetSlider from "@/components/BudgetSlider";
 import InfoTooltip from "@/components/InfoTooltip";
+import ToggleSwitch from "@/components/ToggleSwitch";
 
 interface TeamTabProps {
   drivers: FantasyDriver[];
@@ -473,25 +474,20 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
         collapsed={suggestionsCollapsed}
         onToggle={() => setSuggestionsCollapsed((v) => !v)}
         headerRight={
-          <div className="flex items-center gap-3">
-            <button
-              onClick={(e) => { e.stopPropagation(); setIncludePractice((v) => !v); setSuggestionPage(0); }}
-              aria-pressed={includePractice}
-              className={`min-h-[44px] px-3 rounded-lg text-xs font-medium border transition-colors ${
-                includePractice
-                  ? "bg-red-600 text-white border-red-600"
-                  : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200"
-              }`}
-            >
-              Include FP
-            </button>
-            {mergedSuggestions.length > 0 && (
-              <span className="text-xs text-zinc-500 shrink-0">{mergedSuggestions.length}</span>
-            )}
-          </div>
+          mergedSuggestions.length > 0 ? (
+            <span className="text-xs text-zinc-500">{mergedSuggestions.length} upgrades</span>
+          ) : undefined
         }
       >
           <div className="p-3 sm:p-4">
+            <div className="pb-3 mb-3 border-b border-zinc-800">
+              <ToggleSwitch
+                checked={includePractice}
+                onChange={(v) => { setIncludePractice(v); setSuggestionPage(0); }}
+                label="Include FP"
+                hint="Also list drivers who were quicker in practice, not only higher on points"
+              />
+            </div>
             {includePractice && practiceState !== "ready" && (
               <div className="mb-3 text-xs text-zinc-500">
                 {practiceState === "loading" && "Loading practice data..."}
@@ -540,7 +536,9 @@ function SuggestionCard({ suggestion, index }: { suggestion: PointsSwapSuggestio
 
   return (
     <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors">
-      <div className="flex items-start justify-between gap-4">
+      {/* Stacked on a phone so the names get the full width — with three stats beside them
+          they were truncated to "Alexand..." */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <span className="text-zinc-600 text-sm font-mono w-6 shrink-0">
             #{index + 1}
@@ -548,7 +546,10 @@ function SuggestionCard({ suggestion, index }: { suggestion: PointsSwapSuggestio
 
           {/* Current */}
           <div className="min-w-0">
-            <div className="font-medium text-red-400 truncate">{current.name}</div>
+            <div className="font-medium text-red-400 truncate">
+              <span className="sm:hidden">{current.short}</span>
+              <span className="hidden sm:inline">{current.name}</span>
+            </div>
             <div className="text-xs text-zinc-500 truncate">{current.teamName}</div>
           </div>
 
@@ -556,13 +557,16 @@ function SuggestionCard({ suggestion, index }: { suggestion: PointsSwapSuggestio
 
           {/* Upgrade */}
           <div className="min-w-0">
-            <div className="font-medium text-emerald-400 truncate">{upgrade.name}</div>
+            <div className="font-medium text-emerald-400 truncate">
+              <span className="sm:hidden">{upgrade.short}</span>
+              <span className="hidden sm:inline">{upgrade.name}</span>
+            </div>
             <div className="text-xs text-zinc-500 truncate">{upgrade.teamName}</div>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 shrink-0 text-right">
+        <div className="flex flex-row flex-wrap gap-4 sm:gap-4 shrink-0 sm:text-right">
           <div>
             <div className="text-xs text-zinc-500">Points</div>
             <div className={`text-sm font-mono ${pointsDelta > 0 ? "text-emerald-400" : "text-zinc-500"}`}>
