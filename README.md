@@ -7,13 +7,15 @@ which swaps actually buy you pace, and where prices are heading. Built for the p
 
 **Home** — every driver ranked by practice pace, with sector times, top speed, price and a
 value score. The heading names the session and the circuit the ranking is based on, so it is
-never ambiguous which data you are looking at. Below it a budget slider (0.1M–10M): drag it
-and you get the driver and constructor swaps that fit, sorted by biggest lap-time gain.
-Nothing is refetched while you drag — the swaps are computed in the browser.
+never ambiguous which data you are looking at. Below it you pick one driver or constructor
+and a budget (0.1M–15M), and get the entries that would replace them within it, sorted by
+biggest lap-time gain. Only entries with at least one affordable quicker replacement are
+offered. Nothing is refetched while you drag — the swaps are computed in the browser.
 
 **Teams** — enter up to three fantasy teams (5 drivers + 2 constructors each), name them,
-and give each its own remaining budget. Each team gets its own upgrade suggestions, ranked
-by season points gained. Teams are saved in the browser and survive a reload.
+and give each its own budget correction (see [Budget correction](#budget-correction)). Each
+team gets its own upgrade suggestions, ranked by season points gained, and a switch that
+folds practice pace into the same list. Teams are saved in the browser and survive a reload.
 
 **Prices** — current prices for all drivers and constructors, with the change since the last
 round, ownership, points, and a trend indicator. See [Price trend](#price-trend) for what
@@ -67,6 +69,10 @@ docker run -p 3000:3000 \
   f1-fantasy
 ```
 
+`docker-compose.yml` is the deployment that actually runs, pulling the published image from
+`ghcr.io/cheorges/f1-fantasy-optimizer`. Images are built by a `v*` tag only — a merge to
+`main` deploys nothing.
+
 ## Environment Variables
 
 | Variable | Description | Default |
@@ -98,6 +104,30 @@ Feeds are validated with zod and fail loudly on a shape change rather than silen
 producing `NaN`. One consequence worth knowing: OpenF1 returns HTTP 401 while a session is
 live, which the app surfaces as a short notice instead of an error.
 
+### Budget correction
+
+The game's 100M cap applies to what you **paid** for your squad. The app only ever sees
+today's prices, and the difference between the two is the value your drivers have gained
+since you bought them — invisible from the outside. A squad reading 107.5M here can still
+have budget free in the official app.
+
+So each team carries one number you enter yourself: how much more the squad is worth today
+than what was paid for it. Everything else follows from it.
+
+```
+Market value (app computes)   $107.5M
+Budget correction (you)        - $8.9M
+──────────────────────────────────────
+Effective spend                 $98.6M / $100M
+Remaining budget (app)           $1.4M   → filters the suggestions
+```
+
+It is a property of the team, not of a moment, so it stays valid while you swap drivers
+around — unlike a remaining-budget figure, which goes stale the instant anything changes.
+Teams saved before this existed carry a remaining budget instead, which is a different
+quantity and cannot be converted, so it is dropped: **the correction has to be entered once
+per team.**
+
 ### Price trend
 
 The trend column is **an estimate, not a forecast.**
@@ -119,6 +149,12 @@ The value score is `1000 / (lapTime × price)` — pace per dollar, nothing else
 ownership and the feed's own value-for-money figure are deliberately left out of it. Practice
 pace also says nothing about race pace, fuel loads, or engine modes, so treat the swap
 recommendations as one input rather than an answer.
+
+Points and lap times are never combined into a single score either. Doing so needs an
+exchange rate between a championship point and a tenth of a second, and nothing in the app
+can justify one — but it would silently decide the whole ordering. The team suggestions
+therefore sort points upgrades by points gained, then the pace-only cases by time gained,
+and state on each row which of the two put it there.
 
 ## Tech Stack
 
