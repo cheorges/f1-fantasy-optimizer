@@ -553,9 +553,9 @@ function SuggestionCard({ suggestion }: { suggestion: PointsSwapSuggestion }) {
 
   const badge =
     qualifiedBy === "pace"
-      ? { label: "Faster in practice", className: "bg-sky-900/50 text-sky-300" }
+      ? { label: "Faster in Practice", className: "bg-sky-900/50 text-sky-300" }
       : qualifiedBy === "both"
-        ? { label: "Points + practice", className: "bg-emerald-900/50 text-emerald-300" }
+        ? { label: "Points + Practice", className: "bg-emerald-900/50 text-emerald-300" }
         : { label: "More points", className: "bg-zinc-700/50 text-zinc-400" };
 
   return (
