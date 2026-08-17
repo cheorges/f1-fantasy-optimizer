@@ -515,7 +515,6 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
                 <Pagination
                   page={suggestionPage}
                   totalPages={totalPages}
-                  total={mergedSuggestions.length}
                   onPrev={() => setSuggestionPage((p) => Math.max(0, p - 1))}
                   onNext={() => setSuggestionPage((p) => Math.min(totalPages - 1, p + 1))}
                 />

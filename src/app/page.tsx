@@ -324,7 +324,6 @@ export default function Home() {
               <Pagination
                 page={driverPage}
                 totalPages={driverTotalPages}
-                total={filteredDriverRecs.length}
                 onPrev={() => setDriverPage((p) => Math.max(0, p - 1))}
                 onNext={() => setDriverPage((p) => Math.min(driverTotalPages - 1, p + 1))}
               />
@@ -366,7 +365,6 @@ export default function Home() {
               <Pagination
                 page={constructorPage}
                 totalPages={constructorTotalPages}
-                total={constructorRecs.length}
                 onPrev={() => setConstructorPage((p) => Math.max(0, p - 1))}
                 onNext={() => setConstructorPage((p) => Math.min(constructorTotalPages - 1, p + 1))}
               />
