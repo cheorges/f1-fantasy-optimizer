@@ -28,6 +28,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The 100M cap was checked against today's prices, but it applies to purchase prices — a squad whose drivers gained value read as over cap while the official game still showed budget free
 - `formatPrice` rendered the sign after the currency (`$-5.7M`), visible once the correction and remaining budget could go negative
 - A fetch effect cancelled its own request by listing the state it sets in its dependency array, leaving the section on "loading" forever
+- "Include FP" offered drivers and constructors already in your own squad, since the practice path filtered only the outgoing side of a swap while the points path filtered both
+- Lowering the home page budget below what the current pick needs left the section blank instead of saying so
+- A practice fetch blocked by a live session, or failed outright, could not be retried — the switch was the only affordance and it did nothing
 - The confirmation dialog reused keyframes carrying `translateX(-50%)`, which shifted the overlay half a viewport sideways while animating
 
 ## [1.0.0] - 2026-08-15

@@ -206,6 +206,10 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
         const res = await fetch("/api/drivers");
         const liveMessage = await getLiveSessionMessage(res);
         if (liveMessage) {
+          // Not a final answer: the session ends and the endpoint opens again. Releasing
+          // the guard makes toggling the switch off and on a retry — otherwise the notice
+          // would stand for the lifetime of the mount.
+          practiceRequested.current = false;
           setPracticeState("blocked");
           return;
         }
@@ -216,6 +220,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
         setPracticeConstructors(data.constructors);
         setPracticeState("ready");
       } catch {
+        practiceRequested.current = false;
         setPracticeState("error");
       }
     })();
@@ -254,16 +259,21 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
 
   // Same engine as the home page, then narrowed to the drivers you actually hold. Running
   // it unfiltered first keeps one implementation of "what is a faster swap".
+  // Both sides are filtered: out must be held, in must not. Swapping one of your own for
+  // another is not a move the game can make, and a held driver who is quicker and cheaper
+  // would otherwise qualify against any budget.
   const practiceDriverSwaps = useMemo(() => {
     if (!includePractice || practiceState !== "ready") return [];
     return generateRecommendations(practiceDrivers, remainingBudget)
-      .filter((r) => teamTlas.has(r.driverOut.nameAcronym.toUpperCase()));
+      .filter((r) => teamTlas.has(r.driverOut.nameAcronym.toUpperCase())
+        && !teamTlas.has(r.driverIn.nameAcronym.toUpperCase()));
   }, [includePractice, practiceState, practiceDrivers, remainingBudget, teamTlas]);
 
   const practiceConstructorSwaps = useMemo(() => {
     if (!includePractice || practiceState !== "ready") return [];
     return generateConstructorRecommendations(practiceConstructors, remainingBudget)
-      .filter((r) => teamConstructorKeys.has(canonicalTeam(r.constructorOut.name)));
+      .filter((r) => teamConstructorKeys.has(canonicalTeam(r.constructorOut.name))
+        && !teamConstructorKeys.has(canonicalTeam(r.constructorIn.name)));
   }, [includePractice, practiceState, practiceConstructors, remainingBudget, teamConstructorKeys]);
 
   // One list. Practice entries fold into the points ones rather than sitting beside them.

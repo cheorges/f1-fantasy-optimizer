@@ -328,6 +328,12 @@ export default function Home() {
             <div className="text-center py-8 text-zinc-500 text-sm">
               Pick a driver or constructor to see who could replace them.
             </div>
+          ) : selectedDriverRecs.length + selectedConstructorRecs.length === 0 ? (
+            // Lowering the budget can strip the current selection of every replacement
+            // while others still have one, so the branch above does not catch it.
+            <div className="text-center py-8 text-zinc-500 text-sm">
+              No replacement for this pick within the budget. Try increasing it.
+            </div>
           ) : (
             <>
               <div className="flex flex-col gap-3">
