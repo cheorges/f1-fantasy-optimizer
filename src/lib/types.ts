@@ -178,4 +178,10 @@ export interface PointsSwapSuggestion {
   upgrade: { id: number; name: string; teamName: string; price: number; overallPoints: number };
   pointsDelta: number;
   priceDelta: number;
+  // Seconds the replacement was quicker in the practice session, when practice data is
+  // included and both had a valid lap. Undefined otherwise — never zero as a stand-in.
+  timeDelta?: number;
+  // Why this entry is in the list at all. Points and seconds are not comparable, so the
+  // reason is shown rather than folded into a single score.
+  qualifiedBy: "points" | "pace" | "both";
 }

@@ -2,7 +2,12 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { FantasyDriver, FantasyConstructor, FantasyTeam, TeamStore, PointsSwapSuggestion } from "@/lib/types";
-import { loadTeams, saveTeams, makeTeam, getTeamSuggestions, MAX_TEAMS } from "@/lib/team-optimizer";
+import { loadTeams, saveTeams, makeTeam, getTeamSuggestions, mergePracticeSwaps, MAX_TEAMS } from "@/lib/team-optimizer";
+import type { DriverAnalysis, ConstructorAnalysis } from "@/lib/types";
+import type { DriversResponse } from "@/lib/api-types";
+import { generateRecommendations, generateConstructorRecommendations } from "@/lib/swaps";
+import { getLiveSessionMessage } from "@/lib/live-session";
+import { canonicalTeam } from "@/lib/team-names";
 import { formatPrice } from "@/lib/format";
 import { CORRECTION_MIN, CORRECTION_MAX } from "@/lib/config";
 import CollapsibleSection from "@/components/CollapsibleSection";
@@ -45,6 +50,14 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   const [teamCollapsed, setTeamCollapsed] = useState(false);
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
   const [suggestionPage, setSuggestionPage] = useState(0);
+
+  // Practice pace is the home page's question ("who is faster"), asked here about your own
+  // line-up. Off by default and only fetched once switched on, so the page costs nothing
+  // extra for anyone who doesn't want it.
+  const [includePractice, setIncludePractice] = useState(false);
+  const [practiceDrivers, setPracticeDrivers] = useState<DriverAnalysis[]>([]);
+  const [practiceConstructors, setPracticeConstructors] = useState<ConstructorAnalysis[]>([]);
+  const [practiceState, setPracticeState] = useState<"idle" | "loading" | "ready" | "blocked" | "error">("idle");
 
   const restoredFromStorage = useRef(false);
 
@@ -152,6 +165,39 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   const remainingBudget = BUDGET_CAP - effectiveCost;
   const overCap = effectiveCost > BUDGET_CAP;
 
+  // Fetched without a session_key, so the API picks the latest practice session — the same
+  // default the home page lands on. Runs once, not on every toggle.
+  // Guarded by a ref, not by practiceState: depending on the state this effect sets would
+  // re-run it on the first setState, and the cleanup would then cancel the fetch it just
+  // started. Toggling off mid-flight lets the result land anyway — the block is collapsed,
+  // and the data is ready when it is opened again.
+  const practiceRequested = useRef(false);
+  useEffect(() => {
+    if (!includePractice) return;
+    if (practiceRequested.current) return;
+    practiceRequested.current = true;
+    setPracticeState("loading");
+
+    (async () => {
+      try {
+        const res = await fetch("/api/drivers");
+        const liveMessage = await getLiveSessionMessage(res);
+        if (liveMessage) {
+          setPracticeState("blocked");
+          return;
+        }
+        if (!res.ok) throw new Error("Failed to load practice data");
+
+        const data: DriversResponse = await res.json();
+        setPracticeDrivers(data.drivers);
+        setPracticeConstructors(data.constructors);
+        setPracticeState("ready");
+      } catch {
+        setPracticeState("error");
+      }
+    })();
+  }, [includePractice]);
+
   const selectedDriverIdSet = useMemo(() => new Set(filled(driverIds)), [driverIds]);
   const selectedConstructorIdSet = useMemo(() => new Set(filled(constructorIds)), [constructorIds]);
 
@@ -162,8 +208,54 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
     return getTeamSuggestions(validDriverIds, validConstructorIds, drivers, constructors, remainingBudget);
   }, [driverIds, constructorIds, drivers, constructors, remainingBudget]);
 
-  const totalPages = Math.max(1, Math.ceil(suggestions.length / PAGE_SIZE));
-  const pagedSuggestions = suggestions.slice(suggestionPage * PAGE_SIZE, (suggestionPage + 1) * PAGE_SIZE);
+
+  // The team is keyed by Fantasy player id, the practice data by three-letter acronym and
+  // canonical team name — the same two joins the server already uses in analyzer.ts.
+  const teamTlas = useMemo(() => {
+    const set = new Set<string>();
+    for (const id of filled(driverIds)) {
+      const d = drivers.find((d) => d.id === id);
+      if (d) set.add(d.tla.toUpperCase());
+    }
+    return set;
+  }, [driverIds, drivers]);
+
+  const teamConstructorKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const id of filled(constructorIds)) {
+      const c = constructors.find((c) => c.id === id);
+      if (c) set.add(canonicalTeam(c.name));
+    }
+    return set;
+  }, [constructorIds, constructors]);
+
+  // Same engine as the home page, then narrowed to the drivers you actually hold. Running
+  // it unfiltered first keeps one implementation of "what is a faster swap".
+  const practiceDriverSwaps = useMemo(() => {
+    if (!includePractice || practiceState !== "ready") return [];
+    return generateRecommendations(practiceDrivers, remainingBudget)
+      .filter((r) => teamTlas.has(r.driverOut.nameAcronym.toUpperCase()));
+  }, [includePractice, practiceState, practiceDrivers, remainingBudget, teamTlas]);
+
+  const practiceConstructorSwaps = useMemo(() => {
+    if (!includePractice || practiceState !== "ready") return [];
+    return generateConstructorRecommendations(practiceConstructors, remainingBudget)
+      .filter((r) => teamConstructorKeys.has(canonicalTeam(r.constructorOut.name)));
+  }, [includePractice, practiceState, practiceConstructors, remainingBudget, teamConstructorKeys]);
+
+  // One list. Practice entries fold into the points ones rather than sitting beside them.
+  const mergedSuggestions = useMemo(
+    () => (practiceDriverSwaps.length === 0 && practiceConstructorSwaps.length === 0
+      ? suggestions
+      : mergePracticeSwaps(suggestions, practiceDriverSwaps, practiceConstructorSwaps, drivers, constructors)),
+    [suggestions, practiceDriverSwaps, practiceConstructorSwaps, drivers, constructors],
+  );
+
+  const practiceSessionName = practiceDrivers[0]?.sessionName ?? null;
+
+  const totalPages = Math.max(1, Math.ceil(mergedSuggestions.length / PAGE_SIZE));
+  const pagedSuggestions = mergedSuggestions.slice(suggestionPage * PAGE_SIZE, (suggestionPage + 1) * PAGE_SIZE);
+
 
   function handleDriverChange(slotIndex: number, value: string) {
     const next = [...driverIds];
@@ -377,21 +469,46 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       {/* Optimization Suggestions */}
       <CollapsibleSection
         title="Upgrade Suggestions"
-        info="Shows which available drivers and constructors have more Fantasy points than your current team members and fit within your remaining budget. Sorted by biggest points improvement."
+        info="Which available drivers and constructors beat one you hold, within your remaining budget. By default that means more Fantasy points. Switch on Include FP and anyone who was quicker in the latest practice session joins the same list, marked as such — a driver can be fast this weekend and still be behind on points. Points and lap times are shown separately rather than combined into one score, because there is no honest exchange rate between them."
         collapsed={suggestionsCollapsed}
         onToggle={() => setSuggestionsCollapsed((v) => !v)}
         headerRight={
-          suggestions.length > 0 ? (
-            <span className="text-xs text-zinc-500">{suggestions.length} upgrades</span>
-          ) : undefined
+          <div className="flex items-center gap-3">
+            <button
+              onClick={(e) => { e.stopPropagation(); setIncludePractice((v) => !v); setSuggestionPage(0); }}
+              aria-pressed={includePractice}
+              className={`min-h-[44px] px-3 rounded-lg text-xs font-medium border transition-colors ${
+                includePractice
+                  ? "bg-red-600 text-white border-red-600"
+                  : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200"
+              }`}
+            >
+              Include FP
+            </button>
+            {mergedSuggestions.length > 0 && (
+              <span className="text-xs text-zinc-500 shrink-0">{mergedSuggestions.length}</span>
+            )}
+          </div>
         }
       >
           <div className="p-3 sm:p-4">
+            {includePractice && practiceState !== "ready" && (
+              <div className="mb-3 text-xs text-zinc-500">
+                {practiceState === "loading" && "Loading practice data..."}
+                {practiceState === "blocked" && "A session is running — OpenF1's free tier blocks practice data while it is live, so only points-based upgrades are listed."}
+                {practiceState === "error" && "Practice data could not be loaded; only points-based upgrades are listed."}
+              </div>
+            )}
+            {includePractice && practiceState === "ready" && practiceSessionName && (
+              <div className="mb-3 text-xs text-zinc-500">
+                Practice pace from {practiceSessionName}.
+              </div>
+            )}
             {!teamComplete ? (
               <div className="text-center py-8 text-zinc-500 text-sm">
                 Select all 5 drivers and 2 constructors to see upgrade suggestions.
               </div>
-            ) : suggestions.length === 0 ? (
+            ) : mergedSuggestions.length === 0 ? (
               <div className="text-center py-8 text-zinc-500 text-sm">
                 No upgrades available for this budget. Try increasing your remaining budget.
               </div>
@@ -405,7 +522,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
                 <Pagination
                   page={suggestionPage}
                   totalPages={totalPages}
-                  total={suggestions.length}
+                  total={mergedSuggestions.length}
                   onPrev={() => setSuggestionPage((p) => Math.max(0, p - 1))}
                   onNext={() => setSuggestionPage((p) => Math.min(totalPages - 1, p + 1))}
                 />
@@ -413,12 +530,13 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
             )}
           </div>
       </CollapsibleSection>
+
     </div>
   );
 }
 
 function SuggestionCard({ suggestion, index }: { suggestion: PointsSwapSuggestion; index: number }) {
-  const { current, upgrade, pointsDelta, priceDelta, type } = suggestion;
+  const { current, upgrade, pointsDelta, priceDelta, type, timeDelta, qualifiedBy } = suggestion;
 
   return (
     <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors">
@@ -447,10 +565,16 @@ function SuggestionCard({ suggestion, index }: { suggestion: PointsSwapSuggestio
         <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 shrink-0 text-right">
           <div>
             <div className="text-xs text-zinc-500">Points</div>
-            <div className="text-sm font-mono text-emerald-400">
-              +{pointsDelta} pts
+            <div className={`text-sm font-mono ${pointsDelta > 0 ? "text-emerald-400" : "text-zinc-500"}`}>
+              {pointsDelta > 0 ? "+" : ""}{pointsDelta} pts
             </div>
           </div>
+          {timeDelta !== undefined && (
+            <div>
+              <div className="text-xs text-zinc-500">Practice</div>
+              <div className="text-sm font-mono text-emerald-400">-{timeDelta.toFixed(3)}s</div>
+            </div>
+          )}
           <div>
             <div className="text-xs text-zinc-500">Cost</div>
             <div className={`text-sm font-mono ${priceDelta <= 0 ? "text-emerald-400" : "text-yellow-400"}`}>
@@ -462,8 +586,15 @@ function SuggestionCard({ suggestion, index }: { suggestion: PointsSwapSuggestio
 
       {/* Detail line */}
       <div className="mt-3 flex gap-3 sm:gap-6 flex-wrap text-xs text-zinc-500">
-        <span className={`px-1.5 py-0.5 rounded text-xs ${type === "driver" ? "bg-zinc-700/50" : "bg-zinc-700/50 text-zinc-400"}`}>
+        <span className="px-1.5 py-0.5 rounded text-xs bg-zinc-700/50 text-zinc-400">
           {type === "driver" ? "Driver" : "Constructor"}
+        </span>
+        <span className={`px-1.5 py-0.5 rounded text-xs ${
+          qualifiedBy === "pace" ? "bg-sky-900/50 text-sky-300"
+            : qualifiedBy === "both" ? "bg-emerald-900/50 text-emerald-300"
+            : "bg-zinc-700/50 text-zinc-400"
+        }`}>
+          {qualifiedBy === "pace" ? "Faster in practice" : qualifiedBy === "both" ? "Points + practice" : "More points"}
         </span>
         <span>{current.name}: {current.overallPoints} pts / {formatPrice(current.price)}</span>
         <span>{upgrade.name}: {upgrade.overallPoints} pts / {formatPrice(upgrade.price)}</span>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getTeamSuggestions, loadTeams, saveTeams, makeTeam, MAX_TEAMS } from "./team-optimizer";
+import { getTeamSuggestions, mergePracticeSwaps, loadTeams, saveTeams, makeTeam, MAX_TEAMS } from "./team-optimizer";
 import type { FantasyDriver, FantasyConstructor } from "./types";
 
 // Pinned on purpose: renaming this key would orphan every saved team.
@@ -178,5 +178,52 @@ describe("team storage", () => {
   it("falls back to the first team when the stored active id is gone", () => {
     saveTeams({ version: 3, teams: [makeTeam(0)], activeId: "team-does-not-exist" });
     expect(loadTeams().activeId).toBe(makeTeam(0).id);
+  });
+});
+
+describe("mergePracticeSwaps", () => {
+  const drivers = [
+    driver({ id: 1, tla: "AAA", lastName: "Alpha", overallPoints: 100, price: 20 }),
+    driver({ id: 2, tla: "BBB", lastName: "Bravo", overallPoints: 130, price: 21 }),
+    driver({ id: 3, tla: "CCC", lastName: "Charlie", overallPoints: 40, price: 19 }),
+  ];
+
+  function analysis(acronym: string) {
+    return { nameAcronym: acronym } as never;
+  }
+
+  function swap(out: string, into: string, timeDelta: number) {
+    return { driverOut: analysis(out), driverIn: analysis(into), timeDelta } as never;
+  }
+
+  it("keeps points entries first and appends pace-only ones by time gained", () => {
+    const points = getTeamSuggestions([1], [], drivers, [], 100);
+    // Charlie is slower on points but quicker on track; Bravo qualifies both ways.
+    const merged = mergePracticeSwaps(
+      points,
+      [swap("AAA", "CCC", 0.4), swap("AAA", "BBB", 0.2)],
+      [],
+      drivers,
+      [],
+    );
+
+    expect(merged.map((s) => s.qualifiedBy)).toEqual(["both", "pace"]);
+    expect(merged[0]!.upgrade.id).toBe(2);
+    expect(merged[0]!.timeDelta).toBe(0.2);
+    expect(merged[1]!.upgrade.id).toBe(3);
+  });
+
+  it("does not duplicate an entry that qualifies on both grounds", () => {
+    const points = getTeamSuggestions([1], [], drivers, [], 100);
+    const merged = mergePracticeSwaps(points, [swap("AAA", "BBB", 0.3)], [], drivers, []);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.qualifiedBy).toBe("both");
+    expect(merged[0]!.pointsDelta).toBe(30);
+  });
+
+  it("skips a practice driver that has no Fantasy entry", () => {
+    const merged = mergePracticeSwaps([], [swap("AAA", "ZZZ", 0.5)], [], drivers, []);
+    expect(merged).toHaveLength(0);
   });
 });
