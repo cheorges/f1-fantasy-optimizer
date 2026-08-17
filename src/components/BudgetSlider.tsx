@@ -8,9 +8,18 @@ interface BudgetSliderProps {
   onChange: (budget: number) => void;
   disabled: boolean;
   label?: string;
+  min?: number;
+  max?: number;
 }
 
-export default function BudgetSlider({ value, onChange, disabled, label = "Available Budget" }: BudgetSliderProps) {
+export default function BudgetSlider({
+  value,
+  onChange,
+  disabled,
+  label = "Available Budget",
+  min = BUDGET_MIN,
+  max = BUDGET_MAX,
+}: BudgetSliderProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
@@ -22,8 +31,8 @@ export default function BudgetSlider({ value, onChange, disabled, label = "Avail
       <input
         id="budget-slider"
         type="range"
-        min={BUDGET_MIN}
-        max={BUDGET_MAX}
+        min={min}
+        max={max}
         step={BUDGET_STEP}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
@@ -35,8 +44,8 @@ export default function BudgetSlider({ value, onChange, disabled, label = "Avail
           [&::-moz-range-thumb]:w-7 [&::-moz-range-thumb]:h-7 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-red-600 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-zinc-950"
       />
       <div className="flex justify-between text-xs text-zinc-600 tabular-nums">
-        <span>{formatPrice(BUDGET_MIN)}</span>
-        <span>{formatPrice(BUDGET_MAX)}</span>
+        <span>{formatPrice(min)}</span>
+        <span>{formatPrice(max)}</span>
       </div>
     </div>
   );

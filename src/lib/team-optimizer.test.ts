@@ -120,7 +120,7 @@ describe("team storage", () => {
 
     const store = loadTeams();
 
-    expect(store.version).toBe(2);
+    expect(store.version).toBe(3);
     expect(store.teams).toHaveLength(1);
     expect(store.teams[0]!.driverIds).toEqual([1, 2, 3]);
     expect(store.teams[0]!.constructorIds).toEqual([100]);
@@ -129,7 +129,7 @@ describe("team storage", () => {
 
   it("round-trips a multi-team store", () => {
     const original = {
-      version: 2 as const,
+      version: 3 as const,
       teams: [makeTeam(0), { ...makeTeam(1), name: "Mini League", driverIds: [7, null, 9] }],
       activeId: makeTeam(1).id,
     };
@@ -144,7 +144,7 @@ describe("team storage", () => {
 
   it("never returns more teams than the cap", () => {
     saveTeams({
-      version: 2,
+      version: 3,
       teams: [makeTeam(0), makeTeam(1), makeTeam(2), makeTeam(3), makeTeam(4)],
       activeId: makeTeam(0).id,
     });
@@ -159,8 +159,24 @@ describe("team storage", () => {
     expect(loadTeams().teams[0]!.driverIds).toEqual([]);
   });
 
+  it("does not read a v2 remaining budget as a correction", () => {
+    // v2 stored `budget` meaning "remaining budget" — a different quantity. Carrying the
+    // number over would silently shift the team's effective cost by that amount.
+    stored[STORAGE_KEY] = JSON.stringify({
+      version: 2,
+      teams: [{ id: "team-1", name: "Team 1", driverIds: [1], constructorIds: [100], budget: 7.5 }],
+      activeId: "team-1",
+    });
+
+    const store = loadTeams();
+
+    expect(store.version).toBe(3);
+    expect(store.teams[0]!.budgetCorrection).toBe(0);
+    expect(store.teams[0]!.driverIds).toEqual([1]);
+  });
+
   it("falls back to the first team when the stored active id is gone", () => {
-    saveTeams({ version: 2, teams: [makeTeam(0)], activeId: "team-does-not-exist" });
+    saveTeams({ version: 3, teams: [makeTeam(0)], activeId: "team-does-not-exist" });
     expect(loadTeams().activeId).toBe(makeTeam(0).id);
   });
 });

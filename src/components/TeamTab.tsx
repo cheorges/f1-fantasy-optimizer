@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import type { FantasyDriver, FantasyConstructor, FantasyTeam, TeamStore, PointsSwapSuggestion } from "@/lib/types";
 import { loadTeams, saveTeams, makeTeam, getTeamSuggestions, MAX_TEAMS } from "@/lib/team-optimizer";
 import { formatPrice } from "@/lib/format";
+import { CORRECTION_MIN, CORRECTION_MAX } from "@/lib/config";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import Pagination from "@/components/Pagination";
 import BudgetSlider from "@/components/BudgetSlider";
@@ -33,7 +34,7 @@ function filled(ids: (number | null)[]): number[] {
 
 function initialStore(): TeamStore {
   const first = makeTeam(0);
-  return { version: 2, teams: [first], activeId: first.id };
+  return { version: 3, teams: [first], activeId: first.id };
 }
 
 export default function TeamTab({ drivers, constructors, round, loading }: TeamTabProps) {
@@ -144,6 +145,13 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
     return cost;
   }, [driverIds, constructorIds, drivers, constructors]);
 
+  // The 100M cap applies to what was paid, but the app only sees today's prices. The
+  // correction bridges the two, and the remaining budget then follows — so it moves on
+  // its own when a driver is swapped, which a hand-entered remaining budget never did.
+  const effectiveCost = teamCost - activeTeam.budgetCorrection;
+  const remainingBudget = BUDGET_CAP - effectiveCost;
+  const overCap = effectiveCost > BUDGET_CAP;
+
   const selectedDriverIdSet = useMemo(() => new Set(filled(driverIds)), [driverIds]);
   const selectedConstructorIdSet = useMemo(() => new Set(filled(constructorIds)), [constructorIds]);
 
@@ -151,8 +159,8 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
     const validDriverIds = filled(driverIds);
     const validConstructorIds = filled(constructorIds);
     if (validDriverIds.length === 0 && validConstructorIds.length === 0) return [];
-    return getTeamSuggestions(validDriverIds, validConstructorIds, drivers, constructors, activeTeam.budget);
-  }, [driverIds, constructorIds, drivers, constructors, activeTeam.budget]);
+    return getTeamSuggestions(validDriverIds, validConstructorIds, drivers, constructors, remainingBudget);
+  }, [driverIds, constructorIds, drivers, constructors, remainingBudget]);
 
   const totalPages = Math.max(1, Math.ceil(suggestions.length / PAGE_SIZE));
   const pagedSuggestions = suggestions.slice(suggestionPage * PAGE_SIZE, (suggestionPage + 1) * PAGE_SIZE);
@@ -268,10 +276,10 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
         onToggle={() => setTeamCollapsed((v) => !v)}
         headerRight={
           <div className="flex items-center gap-3">
-            <span className={`text-sm font-mono font-semibold ${teamCost > BUDGET_CAP ? "text-amber-400" : "text-zinc-200"}`}>
-              {formatPrice(teamCost)}
+            <span className={`text-sm font-mono font-semibold ${overCap ? "text-amber-400" : "text-zinc-200"}`}>
+              {formatPrice(effectiveCost)} / {formatPrice(BUDGET_CAP)}
             </span>
-            {teamCost > BUDGET_CAP && (
+            {overCap && (
               <span className="text-xs text-amber-400">over cap</span>
             )}
           </div>
@@ -334,18 +342,36 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
           </div>
       </CollapsibleSection>
 
-      {/* Remaining Budget */}
+      {/* Budget correction */}
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-medium text-zinc-200">Remaining Budget</span>
-          <InfoTooltip text="Your available budget for swaps on this team. Only upgrades that fit within this budget will be shown. If a driver costs more than your current one, the price difference must fit here." />
+          <span className="text-sm font-medium text-zinc-200">Budget Correction</span>
+          <InfoTooltip text="The official game caps your team at $100M based on what you paid. This app only sees today's prices, so a squad whose drivers gained value looks more expensive than it was. Set this to the difference until the figure above matches what the official app shows you — the remaining budget, and the upgrade suggestions, then follow from it and stay right as you swap." />
         </div>
         <BudgetSlider
-          value={activeTeam.budget}
-          onChange={(budget) => { updateActiveTeam({ budget }); setSuggestionPage(0); }}
+          value={activeTeam.budgetCorrection}
+          onChange={(budgetCorrection) => { updateActiveTeam({ budgetCorrection }); setSuggestionPage(0); }}
           disabled={false}
-          label={activeTeam.name}
+          label="Value gained since purchase"
+          min={CORRECTION_MIN}
+          max={CORRECTION_MAX}
         />
+        <div className="mt-3 pt-3 border-t border-zinc-800 grid grid-cols-3 gap-2 text-xs">
+          <div>
+            <div className="text-zinc-500">Market value</div>
+            <div className="text-zinc-300 font-mono">{formatPrice(teamCost)}</div>
+          </div>
+          <div>
+            <div className="text-zinc-500">Effectively spent</div>
+            <div className="text-zinc-300 font-mono">{formatPrice(effectiveCost)}</div>
+          </div>
+          <div>
+            <div className="text-zinc-500">Remaining</div>
+            <div className={`font-mono ${remainingBudget < 0 ? "text-amber-400" : "text-emerald-400"}`}>
+              {formatPrice(remainingBudget)}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Optimization Suggestions */}

@@ -157,11 +157,17 @@ export interface FantasyTeam {
   // Slot arrays: null means an empty slot, so clearing one doesn't shift the others.
   driverIds: (number | null)[];
   constructorIds: (number | null)[];
-  budget: number;
+  // How much more the squad is worth today than what was actually paid for it. The app
+  // only ever sees current prices, but the game's 100M cap applies to purchase prices —
+  // so this is the one number it cannot derive and the user has to supply. Everything
+  // else (effective spend, remaining budget) follows from it.
+  budgetCorrection: number;
 }
 
 export interface TeamStore {
-  version: 2;
+  // 3 since the correction replaced a stored "remaining budget", which meant something
+  // else entirely and must not be read as a correction.
+  version: 3;
   teams: FantasyTeam[];
   activeId: string;
 }

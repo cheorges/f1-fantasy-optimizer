@@ -1,5 +1,4 @@
 import type { FantasyDriver, FantasyConstructor, FantasyTeam, TeamStore, PointsSwapSuggestion } from "./types";
-import { BUDGET_MIN } from "./config";
 
 const STORAGE_KEY = "f1-fantasy-team";
 
@@ -11,13 +10,13 @@ export function makeTeam(index: number): FantasyTeam {
     name: `Team ${index + 1}`,
     driverIds: [],
     constructorIds: [],
-    budget: BUDGET_MIN,
+    budgetCorrection: 0,
   };
 }
 
 function emptyStore(): TeamStore {
   const first = makeTeam(0);
-  return { version: 2, teams: [first], activeId: first.id };
+  return { version: 3, teams: [first], activeId: first.id };
 }
 
 function isSlotArray(value: unknown): value is (number | null)[] {
@@ -35,12 +34,18 @@ function parseTeam(raw: unknown, index: number): FantasyTeam | null {
     name: typeof t.name === "string" && t.name ? t.name : fallback.name,
     driverIds: t.driverIds,
     constructorIds: t.constructorIds,
-    budget: typeof t.budget === "number" && Number.isFinite(t.budget) ? t.budget : fallback.budget,
+    // A v2 store carries `budget`, which was a remaining budget — a different quantity,
+    // not convertible into a correction. It is dropped rather than misread; the user
+    // re-enters it once and it then stays valid across swaps, which the old one did not.
+    budgetCorrection:
+      typeof t.budgetCorrection === "number" && Number.isFinite(t.budgetCorrection)
+        ? t.budgetCorrection
+        : fallback.budgetCorrection,
   };
 }
 
-// Reads both the v2 store and the pre-v2 shape (a bare {driverIds, constructorIds}),
-// so an existing single team survives the upgrade instead of being silently dropped.
+// Reads the v3 store, the v2 store, and the original bare {driverIds, constructorIds},
+// so an existing line-up survives every upgrade instead of being silently dropped.
 export function loadTeams(): TeamStore {
   if (typeof window === "undefined") return emptyStore();
 
@@ -62,11 +67,11 @@ export function loadTeams(): TeamStore {
       const activeId = typeof store.activeId === "string" && teams.some((t) => t.id === store.activeId)
         ? store.activeId
         : teams[0]!.id;
-      return { version: 2, teams, activeId };
+      return { version: 3, teams, activeId };
     }
 
     const legacy = parseTeam(store, 0);
-    if (legacy) return { version: 2, teams: [legacy], activeId: legacy.id };
+    if (legacy) return { version: 3, teams: [legacy], activeId: legacy.id };
 
     return emptyStore();
   } catch {
