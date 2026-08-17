@@ -1,0 +1,35 @@
+# Deployment for the Synology (Container Manager -> Project, or `docker compose up -d`).
+#
+# Two things to change if the setup moves:
+#   - the host port on the left of "2010:3000" (3000 on the right is fixed, the app
+#     listens there and nowhere else)
+#   - ALLOWED_ORIGIN, which must match the address the browser actually uses,
+#     scheme included and no trailing slash
+services:
+  f1:
+    image: ghcr.io/cheorges/f1-fantasy-optimizer:latest
+    container_name: f1
+    ports:
+      - "2010:3000"
+    environment:
+      # The domain the reverse proxy serves. Use http://192.168.178.100:2010 instead if
+      # you reach the app by IP without a proxy.
+      - ALLOWED_ORIGIN=https://f1.cheorges.ch
+    restart: unless-stopped
+    labels:
+      # Watchtower only touches containers carrying this label - see below.
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Without this, Watchtower updates every container on the NAS, including ones
+      # deliberately pinned to a version.
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_CLEANUP=true
+      # Hourly is plenty: images are only built when a v* tag is pushed.
+      - WATCHTOWER_POLL_INTERVAL=3600
+    restart: unless-stopped
