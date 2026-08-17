@@ -13,7 +13,6 @@ import { CORRECTION_MIN, CORRECTION_MAX } from "@/lib/config";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import Pagination from "@/components/Pagination";
 import BudgetSlider from "@/components/BudgetSlider";
-import InfoTooltip from "@/components/InfoTooltip";
 import ToggleSwitch from "@/components/ToggleSwitch";
 
 interface TeamTabProps {
@@ -459,10 +458,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
               />
 
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm text-zinc-200">Budget Correction</span>
-                  <InfoTooltip text="The official game caps your team at $100M based on what you paid. This app only sees today's prices, so a squad whose drivers gained value looks more expensive than it was. Set this to the difference until 'Effectively spent' matches what the official app shows you — the remaining budget, and these suggestions, then follow from it and stay right as you swap." />
-                </div>
+                <div className="text-sm text-zinc-200 mb-1">Budget Correction</div>
                 <BudgetSlider
                   value={activeTeam.budgetCorrection}
                   onChange={(budgetCorrection) => { updateActiveTeam({ budgetCorrection }); setSuggestionPage(0); }}
