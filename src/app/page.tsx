@@ -291,11 +291,6 @@ export default function Home() {
         />
       </CollapsibleSection>
 
-      {/* Shared Budget Slider */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-        <BudgetSlider value={budget} onChange={handleBudgetChange} disabled={loadingDrivers} />
-      </div>
-
       {/* One table, one question: what can replace this pick. Showing every pairing in
           the field was noise — nobody swaps a driver they don't hold. */}
       <CollapsibleSection
@@ -307,9 +302,14 @@ export default function Home() {
         <div className="p-3 sm:p-4">
           {/* In the body, not the header: at 390px the title wrapped to two lines to make
               room for it. */}
-          <div className="pb-4 mb-4 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center gap-2">
-            <span className="text-sm text-zinc-400 sm:shrink-0">Replace</span>
-            {swapSelect}
+          {/* Both controls that shape the list live with it: who to replace, and what
+              can be spent doing it. */}
+          <div className="pb-4 mb-4 border-b border-zinc-800 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <span className="text-sm text-zinc-400 sm:shrink-0 sm:w-20">Replace</span>
+              {swapSelect}
+            </div>
+            <BudgetSlider value={budget} onChange={handleBudgetChange} disabled={loadingDrivers} />
           </div>
           {loadingDrivers ? (
             <div className="flex items-center justify-center py-8">
