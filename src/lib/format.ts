@@ -7,7 +7,10 @@ export function formatLapTime(seconds: number | null): string {
 
 export function formatPrice(price: number | null): string {
   if (price === null) return "-";
-  return `$${price.toFixed(1)}M`;
+  // Sign before the currency, not after it: the budget correction and the remaining
+  // budget can both go negative, and "$-5.7M" reads as a typo.
+  const sign = price < 0 ? "-" : "";
+  return `${sign}$${Math.abs(price).toFixed(1)}M`;
 }
 
 // When cached data is being shown, the reader needs to know how old it is. Same day shows

@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-08-17
+
+### Added
+
+- Budget correction on the Teams page: enter how much more the squad is worth today than what was paid for it, and the effective spend, remaining budget, over-cap state and suggestion filter all follow from it
+- "Include FP" switch that folds practice pace into the upgrade suggestions — anyone quicker than a driver you hold joins the same list, marked as such
+- Confirmation dialog before deleting a team, and Save/Cancel on renaming one
+- `docker-compose.yml` for the Synology deployment, matching what actually runs there
+
+### Changed
+
+- The home page asks for one driver or constructor and shows who could replace them, instead of comparing every entry against every other
+- The budget slider and the swap picker sit with the list they shape, on both pages; their separate cards are gone
+- Suggestion cards put the absolute figures with the person they describe, so the deltas are stated once instead of twice
+- Driver acronyms below the `sm` breakpoint, with full names kept in the detail line
+- Pagination reads "Page 1 of 2" with chevrons; disabled arrows fade rather than showing an empty box
+- Home budget slider now reaches 15M
+- Team storage is at v3. A v2 team's remaining budget is dropped rather than read as a correction, so **the correction has to be entered once per team after upgrading**
+
+### Fixed
+
+- The 100M cap was checked against today's prices, but it applies to purchase prices — a squad whose drivers gained value read as over cap while the official game still showed budget free
+- `formatPrice` rendered the sign after the currency (`$-5.7M`), visible once the correction and remaining budget could go negative
+- A fetch effect cancelled its own request by listing the state it sets in its dependency array, leaving the section on "loading" forever
+- "Include FP" offered drivers and constructors already in your own squad, since the practice path filtered only the outgoing side of a swap while the points path filtered both
+- Lowering the home page budget below what the current pick needs left the section blank instead of saying so
+- A practice fetch blocked by a live session, or failed outright, could not be retried — the switch was the only affordance and it did nothing
+- The confirmation dialog reused keyframes carrying `translateX(-50%)`, which shifted the overlay half a viewport sideways while animating
+
 ## [1.0.0] - 2026-08-15
 
 First release proper. The 0.x versions were the prototype; this is the app as it is meant

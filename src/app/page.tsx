@@ -27,9 +27,10 @@ export default function Home() {
   const [drivers, setDrivers] = useState<DriverAnalysis[]>([]);
   const [constructors, setConstructors] = useState<ConstructorAnalysis[]>([]);
   const [budget, setBudget] = useState(BUDGET_MIN);
-  const [driverFilter, setDriverFilter] = useState<string | null>(null);
-  const [driverPage, setDriverPage] = useState(0);
-  const [constructorPage, setConstructorPage] = useState(0);
+  // "driver:NOR" or "constructor:Ferrari" — one dropdown covers both, so the page asks
+  // one question instead of showing every pairing in the field.
+  const [selection, setSelection] = useState("");
+  const [page, setPage] = useState(0);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [visibleColumns, setVisibleColumns] = useState<Set<DriverColumn>>(new Set());
   const [showColumnPicker, setShowColumnPicker] = useState(false);
@@ -112,50 +113,46 @@ export default function Home() {
     [constructors, budget],
   );
 
-  const filteredDriverRecs = useMemo(() => {
-    if (!driverFilter) return recommendations;
-    return recommendations.filter((r) => r.driverOut.nameAcronym === driverFilter);
-  }, [recommendations, driverFilter]);
+  const selectedDriverRecs = useMemo(() => {
+    if (!selection.startsWith("driver:")) return [];
+    const acronym = selection.slice("driver:".length);
+    return recommendations.filter((r) => r.driverOut.nameAcronym === acronym);
+  }, [recommendations, selection]);
 
-  const driverOutOptions = useMemo(() => {
-    const seen = new Set<string>();
-    return recommendations
-      .map((r) => r.driverOut.nameAcronym)
-      .filter((acronym) => {
-        if (seen.has(acronym)) return false;
-        seen.add(acronym);
-        return true;
-      })
-      .sort();
-  }, [recommendations]);
+  const selectedConstructorRecs = useMemo(() => {
+    if (!selection.startsWith("constructor:")) return [];
+    const name = selection.slice("constructor:".length);
+    return constructorRecs.filter((r) => r.constructorOut.name === name);
+  }, [constructorRecs, selection]);
+
+  // Only entries that actually have a faster, affordable replacement are offered — an
+  // option that leads to an empty list is a dead end.
+  const swapOptions = useMemo(() => {
+    const driverAcronyms = [...new Set(recommendations.map((r) => r.driverOut.nameAcronym))].sort();
+    const constructorNames = [...new Set(constructorRecs.map((r) => r.constructorOut.name))].sort();
+    return { driverAcronyms, constructorNames };
+  }, [recommendations, constructorRecs]);
 
   const selectedSessionName = useMemo(
     () => sessions.find((s) => s.session_key === selectedSession)?.session_name ?? null,
     [sessions, selectedSession],
   );
 
-  const driverTotalPages = Math.max(1, Math.ceil(filteredDriverRecs.length / PAGE_SIZE));
-  const pagedDriverRecs = filteredDriverRecs.slice(driverPage * PAGE_SIZE, (driverPage + 1) * PAGE_SIZE);
-
-  const constructorTotalPages = Math.max(1, Math.ceil(constructorRecs.length / PAGE_SIZE));
-  const pagedConstructorRecs = constructorRecs.slice(constructorPage * PAGE_SIZE, (constructorPage + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil((selectedDriverRecs.length + selectedConstructorRecs.length) / PAGE_SIZE));
+  const pagedDriverRecs = selectedDriverRecs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const pagedConstructorRecs = selectedConstructorRecs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   function handleSessionSelect(sessionKey: number) {
     setSelectedSession(sessionKey);
-    setDriverFilter(null);
-    setDriverPage(0);
-    setConstructorPage(0);
+    // A different session means different lap times, so the pick may no longer have any
+    // replacement at all — clearing it is honest, keeping it would show an empty list.
+    setSelection("");
+    setPage(0);
   }
 
   function handleBudgetChange(newBudget: number) {
     setBudget(newBudget);
-    setDriverPage(0);
-    setConstructorPage(0);
-  }
-
-  function handleDriverFilterChange(acronym: string) {
-    setDriverFilter(acronym || null);
-    setDriverPage(0);
+    setPage(0);
   }
 
   function toggleSection(id: string) {
@@ -186,7 +183,6 @@ export default function Home() {
   }
 
   const driversCollapsed = collapsedSections.has("drivers");
-  const driverRecsCollapsed = collapsedSections.has("driverRecs");
 
   const columnPicker = (
     <div className="relative">
@@ -220,18 +216,30 @@ export default function Home() {
     </div>
   );
 
-  const driverFilterSelect = recommendations.length > 0 ? (
+  const swapSelect = (
     <select
-      value={driverFilter ?? ""}
-      onChange={(e) => handleDriverFilterChange(e.target.value)}
-      className="min-h-[44px] bg-zinc-800 text-zinc-200 text-xs rounded-lg px-2 border border-zinc-700 focus:border-red-500 focus:outline-none"
+      value={selection}
+      onChange={(e) => { setSelection(e.target.value); setPage(0); }}
+      aria-label="Pick a driver or constructor"
+      className="min-h-[44px] w-full sm:w-56 bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
     >
-      <option value="">All Drivers</option>
-      {driverOutOptions.map((acronym) => (
-        <option key={acronym} value={acronym}>{acronym}</option>
-      ))}
+      <option value="">Pick one...</option>
+      {swapOptions.driverAcronyms.length > 0 && (
+        <optgroup label="Drivers">
+          {swapOptions.driverAcronyms.map((acronym) => (
+            <option key={acronym} value={`driver:${acronym}`}>{acronym}</option>
+          ))}
+        </optgroup>
+      )}
+      {swapOptions.constructorNames.length > 0 && (
+        <optgroup label="Constructors">
+          {swapOptions.constructorNames.map((name) => (
+            <option key={name} value={`constructor:${name}`}>{name}</option>
+          ))}
+        </optgroup>
+      )}
     </select>
-  ) : undefined;
+  );
 
   return (
     <>
@@ -283,32 +291,48 @@ export default function Home() {
         />
       </CollapsibleSection>
 
-      {/* Shared Budget Slider */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-        <BudgetSlider value={budget} onChange={handleBudgetChange} disabled={loadingDrivers} />
-      </div>
-
-      {/* Driver Recommendations */}
+      {/* One table, one question: what can replace this pick. Showing every pairing in
+          the field was noise — nobody swaps a driver they don't hold. */}
       <CollapsibleSection
-        title="Driver Swap Recommendations"
-        info="Each recommendation shows a driver swap that would make your team faster. The driver on the left (red) is the one you'd drop, the driver on the right (green) is the replacement. Only swaps within your available budget are shown. Recommendations are sorted by biggest lap time improvement first."
-        collapsed={driverRecsCollapsed}
-        onToggle={() => toggleSection("driverRecs")}
-        headerRight={driverRecsCollapsed ? undefined : driverFilterSelect}
+        title="Swap Recommendations"
+        info="Pick a driver or constructor and see who could replace them: quicker in the selected practice session and within your available budget, sorted by biggest lap time gain. The one on the left (red) is the one you'd drop, the one on the right (green) is the replacement. Only entries that have at least one affordable, quicker replacement appear in the list."
+        collapsed={collapsedSections.has("swaps")}
+        onToggle={() => toggleSection("swaps")}
       >
         <div className="p-3 sm:p-4">
+          {/* In the body, not the header: at 390px the title wrapped to two lines to make
+              room for it. */}
+          {/* Both controls that shape the list live with it: who to replace, and what
+              can be spent doing it. */}
+          <div className="pb-4 mb-4 border-b border-zinc-800 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <span className="text-sm text-zinc-400 sm:shrink-0 sm:w-20">Replace</span>
+              {swapSelect}
+            </div>
+            <BudgetSlider value={budget} onChange={handleBudgetChange} disabled={loadingDrivers} />
+          </div>
           {loadingDrivers ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-600 border-t-transparent" />
               <span className="ml-3 text-zinc-400 text-sm">Calculating...</span>
             </div>
-          ) : filteredDriverRecs.length === 0 ? (
+          ) : drivers.length === 0 ? (
             <div className="text-center py-8 text-zinc-500 text-sm">
-              {drivers.length === 0
-                ? "Select a practice session to see recommendations"
-                : driverFilter
-                  ? `No swap recommendations for ${driverFilter} with this budget.`
-                  : "No swap recommendations for this budget. Try increasing your budget."}
+              Select a practice session to see recommendations
+            </div>
+          ) : swapOptions.driverAcronyms.length === 0 && swapOptions.constructorNames.length === 0 ? (
+            <div className="text-center py-8 text-zinc-500 text-sm">
+              No swaps available for this budget. Try increasing it.
+            </div>
+          ) : !selection ? (
+            <div className="text-center py-8 text-zinc-500 text-sm">
+              Pick a driver or constructor to see who could replace them.
+            </div>
+          ) : selectedDriverRecs.length + selectedConstructorRecs.length === 0 ? (
+            // Lowering the budget can strip the current selection of every replacement
+            // while others still have one, so the branch above does not catch it.
+            <div className="text-center py-8 text-zinc-500 text-sm">
+              No replacement for this pick within the budget. Try increasing it.
             </div>
           ) : (
             <>
@@ -317,63 +341,28 @@ export default function Home() {
                   <RecommendationCard
                     key={`${rec.driverOut.driverNumber}-${rec.driverIn.driverNumber}`}
                     recommendation={rec}
-                    index={driverPage * PAGE_SIZE + i}
+                    index={page * PAGE_SIZE + i}
+                  />
+                ))}
+                {pagedConstructorRecs.map((rec, i) => (
+                  <ConstructorRecommendationCard
+                    key={`${rec.constructorOut.name}-${rec.constructorIn.name}`}
+                    recommendation={rec}
+                    index={page * PAGE_SIZE + i}
                   />
                 ))}
               </div>
               <Pagination
-                page={driverPage}
-                totalPages={driverTotalPages}
-                total={filteredDriverRecs.length}
-                onPrev={() => setDriverPage((p) => Math.max(0, p - 1))}
-                onNext={() => setDriverPage((p) => Math.min(driverTotalPages - 1, p + 1))}
+                page={page}
+                totalPages={totalPages}
+                onPrev={() => setPage((p) => Math.max(0, p - 1))}
+                onNext={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               />
             </>
           )}
         </div>
       </CollapsibleSection>
 
-      {/* Constructor Recommendations */}
-      <CollapsibleSection
-        title="Constructor Swap Recommendations"
-        info="Each recommendation shows a constructor swap that would make your team faster. A constructor's performance is based on the average lap time of both drivers in the selected practice session. The constructor on the left (red) is the one you'd drop, the one on the right (green) is the replacement. Only swaps within your available budget are shown."
-        collapsed={collapsedSections.has("constructorRecs")}
-        onToggle={() => toggleSection("constructorRecs")}
-      >
-        <div className="p-3 sm:p-4">
-          {loadingDrivers ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-600 border-t-transparent" />
-              <span className="ml-3 text-zinc-400 text-sm">Calculating...</span>
-            </div>
-          ) : constructorRecs.length === 0 ? (
-            <div className="text-center py-8 text-zinc-500 text-sm">
-              {drivers.length === 0
-                ? "Select a practice session to see recommendations"
-                : "No constructor swap recommendations for this budget."}
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-col gap-3">
-                {pagedConstructorRecs.map((rec, i) => (
-                  <ConstructorRecommendationCard
-                    key={`${rec.constructorOut.name}-${rec.constructorIn.name}`}
-                    recommendation={rec}
-                    index={constructorPage * PAGE_SIZE + i}
-                  />
-                ))}
-              </div>
-              <Pagination
-                page={constructorPage}
-                totalPages={constructorTotalPages}
-                total={constructorRecs.length}
-                onPrev={() => setConstructorPage((p) => Math.max(0, p - 1))}
-                onNext={() => setConstructorPage((p) => Math.min(constructorTotalPages - 1, p + 1))}
-              />
-            </>
-          )}
-        </div>
-      </CollapsibleSection>
     </>
   );
 }

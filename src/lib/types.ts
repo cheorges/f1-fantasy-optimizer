@@ -157,19 +157,33 @@ export interface FantasyTeam {
   // Slot arrays: null means an empty slot, so clearing one doesn't shift the others.
   driverIds: (number | null)[];
   constructorIds: (number | null)[];
-  budget: number;
+  // How much more the squad is worth today than what was actually paid for it. The app
+  // only ever sees current prices, but the game's 100M cap applies to purchase prices —
+  // so this is the one number it cannot derive and the user has to supply. Everything
+  // else (effective spend, remaining budget) follows from it.
+  budgetCorrection: number;
 }
 
 export interface TeamStore {
-  version: 2;
+  // 3 since the correction replaced a stored "remaining budget", which meant something
+  // else entirely and must not be read as a correction.
+  version: 3;
   teams: FantasyTeam[];
   activeId: string;
 }
 
 export interface PointsSwapSuggestion {
   type: "driver" | "constructor";
-  current: { id: number; name: string; teamName: string; price: number; overallPoints: number };
-  upgrade: { id: number; name: string; teamName: string; price: number; overallPoints: number };
+  // `short` is the three-letter acronym for drivers, the plain name for constructors —
+  // what the card shows on a phone, where a full name has nowhere to go.
+  current: { id: number; name: string; short: string; teamName: string; price: number; overallPoints: number };
+  upgrade: { id: number; name: string; short: string; teamName: string; price: number; overallPoints: number };
   pointsDelta: number;
   priceDelta: number;
+  // Seconds the replacement was quicker in the practice session, when practice data is
+  // included and both had a valid lap. Undefined otherwise — never zero as a stand-in.
+  timeDelta?: number;
+  // Why this entry is in the list at all. Points and seconds are not comparable, so the
+  // reason is shown rather than folded into a single score.
+  qualifiedBy: "points" | "pace" | "both";
 }

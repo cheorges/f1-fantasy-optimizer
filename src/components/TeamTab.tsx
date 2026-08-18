@@ -2,12 +2,19 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { FantasyDriver, FantasyConstructor, FantasyTeam, TeamStore, PointsSwapSuggestion } from "@/lib/types";
-import { loadTeams, saveTeams, makeTeam, getTeamSuggestions, MAX_TEAMS } from "@/lib/team-optimizer";
+import { loadTeams, saveTeams, makeTeam, getTeamSuggestions, mergePracticeSwaps, MAX_TEAMS } from "@/lib/team-optimizer";
+import type { DriverAnalysis, ConstructorAnalysis } from "@/lib/types";
+import type { DriversResponse } from "@/lib/api-types";
+import { generateRecommendations, generateConstructorRecommendations } from "@/lib/swaps";
+import { getLiveSessionMessage } from "@/lib/live-session";
+import { canonicalTeam } from "@/lib/team-names";
 import { formatPrice } from "@/lib/format";
+import { CORRECTION_MIN, CORRECTION_MAX } from "@/lib/config";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import Pagination from "@/components/Pagination";
 import BudgetSlider from "@/components/BudgetSlider";
-import InfoTooltip from "@/components/InfoTooltip";
+import ToggleSwitch from "@/components/ToggleSwitch";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface TeamTabProps {
   drivers: FantasyDriver[];
@@ -33,7 +40,7 @@ function filled(ids: (number | null)[]): number[] {
 
 function initialStore(): TeamStore {
   const first = makeTeam(0);
-  return { version: 2, teams: [first], activeId: first.id };
+  return { version: 3, teams: [first], activeId: first.id };
 }
 
 export default function TeamTab({ drivers, constructors, round, loading }: TeamTabProps) {
@@ -41,9 +48,23 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   const initial = useRef<TeamStore>(initialStore());
   const [store, setStore] = useState<TeamStore>(initial.current);
   const [renaming, setRenaming] = useState(false);
+  // The edit is held here, not written straight to the store, so Cancel can actually
+  // discard it rather than leaving whatever was typed behind.
+  const [nameDraft, setNameDraft] = useState("");
+  // Deleting a team throws away a line-up the user typed in by hand, and it cannot be
+  // undone — so it asks first instead of acting on the tap.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [teamCollapsed, setTeamCollapsed] = useState(false);
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
   const [suggestionPage, setSuggestionPage] = useState(0);
+
+  // Practice pace is the home page's question ("who is faster"), asked here about your own
+  // line-up. Off by default and only fetched once switched on, so the page costs nothing
+  // extra for anyone who doesn't want it.
+  const [includePractice, setIncludePractice] = useState(false);
+  const [practiceDrivers, setPracticeDrivers] = useState<DriverAnalysis[]>([]);
+  const [practiceConstructors, setPracticeConstructors] = useState<ConstructorAnalysis[]>([]);
+  const [practiceState, setPracticeState] = useState<"idle" | "loading" | "ready" | "blocked" | "error">("idle");
 
   const restoredFromStorage = useRef(false);
 
@@ -106,7 +127,22 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       return { ...prev, teams: [...prev.teams, team], activeId: team.id };
     });
     setRenaming(false);
+    setConfirmDelete(false);
     setSuggestionPage(0);
+  }
+
+  function startRename() {
+    setNameDraft(activeTeam.name);
+    setRenaming(true);
+    setConfirmDelete(false);
+  }
+
+  function saveRename() {
+    // An empty name would leave an unlabelled chip with no way to tell teams apart,
+    // so a blank entry keeps the previous one.
+    const next = nameDraft.trim();
+    if (next) updateActiveTeam({ name: next });
+    setRenaming(false);
   }
 
   function handleDeleteTeam() {
@@ -116,6 +152,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       return { ...prev, teams, activeId: teams[0]!.id };
     });
     setRenaming(false);
+    setConfirmDelete(false);
     setSuggestionPage(0);
   }
 
@@ -144,6 +181,51 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
     return cost;
   }, [driverIds, constructorIds, drivers, constructors]);
 
+  // The 100M cap applies to what was paid, but the app only sees today's prices. The
+  // correction bridges the two, and the remaining budget then follows — so it moves on
+  // its own when a driver is swapped, which a hand-entered remaining budget never did.
+  const effectiveCost = teamCost - activeTeam.budgetCorrection;
+  const remainingBudget = BUDGET_CAP - effectiveCost;
+  const overCap = effectiveCost > BUDGET_CAP;
+
+  // Fetched without a session_key, so the API picks the latest practice session — the same
+  // default the home page lands on. Runs once, not on every toggle.
+  // Guarded by a ref, not by practiceState: depending on the state this effect sets would
+  // re-run it on the first setState, and the cleanup would then cancel the fetch it just
+  // started. Toggling off mid-flight lets the result land anyway — the block is collapsed,
+  // and the data is ready when it is opened again.
+  const practiceRequested = useRef(false);
+  useEffect(() => {
+    if (!includePractice) return;
+    if (practiceRequested.current) return;
+    practiceRequested.current = true;
+    setPracticeState("loading");
+
+    (async () => {
+      try {
+        const res = await fetch("/api/drivers");
+        const liveMessage = await getLiveSessionMessage(res);
+        if (liveMessage) {
+          // Not a final answer: the session ends and the endpoint opens again. Releasing
+          // the guard makes toggling the switch off and on a retry — otherwise the notice
+          // would stand for the lifetime of the mount.
+          practiceRequested.current = false;
+          setPracticeState("blocked");
+          return;
+        }
+        if (!res.ok) throw new Error("Failed to load practice data");
+
+        const data: DriversResponse = await res.json();
+        setPracticeDrivers(data.drivers);
+        setPracticeConstructors(data.constructors);
+        setPracticeState("ready");
+      } catch {
+        practiceRequested.current = false;
+        setPracticeState("error");
+      }
+    })();
+  }, [includePractice]);
+
   const selectedDriverIdSet = useMemo(() => new Set(filled(driverIds)), [driverIds]);
   const selectedConstructorIdSet = useMemo(() => new Set(filled(constructorIds)), [constructorIds]);
 
@@ -151,11 +233,62 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
     const validDriverIds = filled(driverIds);
     const validConstructorIds = filled(constructorIds);
     if (validDriverIds.length === 0 && validConstructorIds.length === 0) return [];
-    return getTeamSuggestions(validDriverIds, validConstructorIds, drivers, constructors, activeTeam.budget);
-  }, [driverIds, constructorIds, drivers, constructors, activeTeam.budget]);
+    return getTeamSuggestions(validDriverIds, validConstructorIds, drivers, constructors, remainingBudget);
+  }, [driverIds, constructorIds, drivers, constructors, remainingBudget]);
 
-  const totalPages = Math.max(1, Math.ceil(suggestions.length / PAGE_SIZE));
-  const pagedSuggestions = suggestions.slice(suggestionPage * PAGE_SIZE, (suggestionPage + 1) * PAGE_SIZE);
+
+  // The team is keyed by Fantasy player id, the practice data by three-letter acronym and
+  // canonical team name — the same two joins the server already uses in analyzer.ts.
+  const teamTlas = useMemo(() => {
+    const set = new Set<string>();
+    for (const id of filled(driverIds)) {
+      const d = drivers.find((d) => d.id === id);
+      if (d) set.add(d.tla.toUpperCase());
+    }
+    return set;
+  }, [driverIds, drivers]);
+
+  const teamConstructorKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const id of filled(constructorIds)) {
+      const c = constructors.find((c) => c.id === id);
+      if (c) set.add(canonicalTeam(c.name));
+    }
+    return set;
+  }, [constructorIds, constructors]);
+
+  // Same engine as the home page, then narrowed to the drivers you actually hold. Running
+  // it unfiltered first keeps one implementation of "what is a faster swap".
+  // Both sides are filtered: out must be held, in must not. Swapping one of your own for
+  // another is not a move the game can make, and a held driver who is quicker and cheaper
+  // would otherwise qualify against any budget.
+  const practiceDriverSwaps = useMemo(() => {
+    if (!includePractice || practiceState !== "ready") return [];
+    return generateRecommendations(practiceDrivers, remainingBudget)
+      .filter((r) => teamTlas.has(r.driverOut.nameAcronym.toUpperCase())
+        && !teamTlas.has(r.driverIn.nameAcronym.toUpperCase()));
+  }, [includePractice, practiceState, practiceDrivers, remainingBudget, teamTlas]);
+
+  const practiceConstructorSwaps = useMemo(() => {
+    if (!includePractice || practiceState !== "ready") return [];
+    return generateConstructorRecommendations(practiceConstructors, remainingBudget)
+      .filter((r) => teamConstructorKeys.has(canonicalTeam(r.constructorOut.name))
+        && !teamConstructorKeys.has(canonicalTeam(r.constructorIn.name)));
+  }, [includePractice, practiceState, practiceConstructors, remainingBudget, teamConstructorKeys]);
+
+  // One list. Practice entries fold into the points ones rather than sitting beside them.
+  const mergedSuggestions = useMemo(
+    () => (practiceDriverSwaps.length === 0 && practiceConstructorSwaps.length === 0
+      ? suggestions
+      : mergePracticeSwaps(suggestions, practiceDriverSwaps, practiceConstructorSwaps, drivers, constructors)),
+    [suggestions, practiceDriverSwaps, practiceConstructorSwaps, drivers, constructors],
+  );
+
+  const practiceSessionName = practiceDrivers[0]?.sessionName ?? null;
+
+  const totalPages = Math.max(1, Math.ceil(mergedSuggestions.length / PAGE_SIZE));
+  const pagedSuggestions = mergedSuggestions.slice(suggestionPage * PAGE_SIZE, (suggestionPage + 1) * PAGE_SIZE);
+
 
   function handleDriverChange(slotIndex: number, value: string) {
     const next = [...driverIds];
@@ -192,6 +325,16 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete this team?"
+          body={<><span className="text-zinc-200 font-medium">{activeTeam.name}</span> and its line-up will be removed. This cannot be undone.</>}
+          confirmLabel="Delete"
+          onConfirm={handleDeleteTeam}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
       {/* Team switcher */}
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-3 sm:px-4 py-3 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
@@ -208,6 +351,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
               onClick={() => {
                 setStore((prev) => ({ ...prev, activeId: team.id }));
                 setRenaming(false);
+                setConfirmDelete(false);
                 setSuggestionPage(0);
               }}
               className={`min-h-[44px] px-4 rounded-full text-sm font-medium transition-colors ${
@@ -230,32 +374,53 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
           )}
         </div>
 
+        {/* Renaming replaces both buttons: while an edit is pending there is nothing to
+            delete yet, and a Delete sitting next to a half-typed name is a mis-tap. */}
         <div className="flex items-center gap-2 flex-wrap">
           {renaming ? (
-            <input
-              autoFocus
-              value={activeTeam.name}
-              onChange={(e) => updateActiveTeam({ name: e.target.value })}
-              onBlur={() => setRenaming(false)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setRenaming(false); }}
-              maxLength={24}
-              className="min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
-            />
+            <>
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveRename();
+                  if (e.key === "Escape") setRenaming(false);
+                }}
+                maxLength={24}
+                aria-label="Team name"
+                className="min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
+              />
+              <button
+                onClick={saveRename}
+                className="min-h-[44px] px-3 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-500 active:bg-red-700 transition-colors"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setRenaming(false)}
+                className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-700 transition-colors"
+              >
+                Cancel
+              </button>
+            </>
           ) : (
-            <button
-              onClick={() => setRenaming(true)}
-              className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 transition-colors"
-            >
-              Rename
-            </button>
-          )}
-          {store.teams.length > 1 && (
-            <button
-              onClick={handleDeleteTeam}
-              className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700 transition-colors"
-            >
-              Delete
-            </button>
+            <>
+              <button
+                onClick={startRename}
+                className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 transition-colors"
+              >
+                Rename
+              </button>
+              {store.teams.length > 1 && (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700 transition-colors"
+                >
+                  Delete
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -268,10 +433,10 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
         onToggle={() => setTeamCollapsed((v) => !v)}
         headerRight={
           <div className="flex items-center gap-3">
-            <span className={`text-sm font-mono font-semibold ${teamCost > BUDGET_CAP ? "text-amber-400" : "text-zinc-200"}`}>
-              {formatPrice(teamCost)}
+            <span className={`text-sm font-mono font-semibold ${overCap ? "text-amber-400" : "text-zinc-200"}`}>
+              {formatPrice(effectiveCost)} / {formatPrice(BUDGET_CAP)}
             </span>
-            {teamCost > BUDGET_CAP && (
+            {overCap && (
               <span className="text-xs text-amber-400">over cap</span>
             )}
           </div>
@@ -334,52 +499,87 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
           </div>
       </CollapsibleSection>
 
-      {/* Remaining Budget */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-medium text-zinc-200">Remaining Budget</span>
-          <InfoTooltip text="Your available budget for swaps on this team. Only upgrades that fit within this budget will be shown. If a driver costs more than your current one, the price difference must fit here." />
-        </div>
-        <BudgetSlider
-          value={activeTeam.budget}
-          onChange={(budget) => { updateActiveTeam({ budget }); setSuggestionPage(0); }}
-          disabled={false}
-          label={activeTeam.name}
-        />
-      </div>
-
       {/* Optimization Suggestions */}
       <CollapsibleSection
         title="Upgrade Suggestions"
-        info="Shows which available drivers and constructors have more Fantasy points than your current team members and fit within your remaining budget. Sorted by biggest points improvement."
+        info="Which available drivers and constructors beat one you hold, within your remaining budget. By default that means more Fantasy points. Switch on Include FP and anyone who was quicker in the latest practice session joins the same list, marked as such — a driver can be fast this weekend and still be behind on points. Points and lap times are shown separately rather than combined into one score, because there is no honest exchange rate between them."
         collapsed={suggestionsCollapsed}
         onToggle={() => setSuggestionsCollapsed((v) => !v)}
         headerRight={
-          suggestions.length > 0 ? (
-            <span className="text-xs text-zinc-500">{suggestions.length} upgrades</span>
+          mergedSuggestions.length > 0 ? (
+            <span className="text-xs text-zinc-500">{mergedSuggestions.length} upgrades</span>
           ) : undefined
         }
       >
           <div className="p-3 sm:p-4">
+            {/* The two controls that shape this list live with it: the correction only
+                exists so the budget below is right, and the budget decides what is listed. */}
+            <div className="pb-4 mb-4 border-b border-zinc-800 flex flex-col gap-4">
+              <ToggleSwitch
+                checked={includePractice}
+                onChange={(v) => { setIncludePractice(v); setSuggestionPage(0); }}
+                label="Include FP"
+                hint="Also list drivers who were quicker in practice, not only higher on points"
+              />
+
+              <div>
+                <div className="text-sm text-zinc-200 mb-1">Budget Correction</div>
+                <BudgetSlider
+                  value={activeTeam.budgetCorrection}
+                  onChange={(budgetCorrection) => { updateActiveTeam({ budgetCorrection }); setSuggestionPage(0); }}
+                  disabled={false}
+                  label="Value gained since purchase"
+                  min={CORRECTION_MIN}
+                  max={CORRECTION_MAX}
+                />
+                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <div className="text-zinc-500">Market value</div>
+                    <div className="text-zinc-300 font-mono">{formatPrice(teamCost)}</div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-500">Effectively spent</div>
+                    <div className="text-zinc-300 font-mono">{formatPrice(effectiveCost)}</div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-500">Remaining</div>
+                    <div className={`font-mono ${remainingBudget < 0 ? "text-amber-400" : "text-emerald-400"}`}>
+                      {formatPrice(remainingBudget)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {includePractice && practiceState !== "ready" && (
+              <div className="mb-3 text-xs text-zinc-500">
+                {practiceState === "loading" && "Loading practice data..."}
+                {practiceState === "blocked" && "A session is running — OpenF1's free tier blocks practice data while it is live, so only points-based upgrades are listed."}
+                {practiceState === "error" && "Practice data could not be loaded; only points-based upgrades are listed."}
+              </div>
+            )}
+            {includePractice && practiceState === "ready" && practiceSessionName && (
+              <div className="mb-3 text-xs text-zinc-500">
+                Practice pace from {practiceSessionName}.
+              </div>
+            )}
             {!teamComplete ? (
               <div className="text-center py-8 text-zinc-500 text-sm">
                 Select all 5 drivers and 2 constructors to see upgrade suggestions.
               </div>
-            ) : suggestions.length === 0 ? (
+            ) : mergedSuggestions.length === 0 ? (
               <div className="text-center py-8 text-zinc-500 text-sm">
                 No upgrades available for this budget. Try increasing your remaining budget.
               </div>
             ) : (
               <>
                 <div className="flex flex-col gap-3">
-                  {pagedSuggestions.map((s, i) => (
-                    <SuggestionCard key={`${s.current.id}-${s.upgrade.id}`} suggestion={s} index={suggestionPage * PAGE_SIZE + i} />
+                  {pagedSuggestions.map((s) => (
+                    <SuggestionCard key={`${s.type}-${s.current.id}-${s.upgrade.id}`} suggestion={s} />
                   ))}
                 </div>
                 <Pagination
                   page={suggestionPage}
                   totalPages={totalPages}
-                  total={suggestions.length}
                   onPrev={() => setSuggestionPage((p) => Math.max(0, p - 1))}
                   onNext={() => setSuggestionPage((p) => Math.min(totalPages - 1, p + 1))}
                 />
@@ -387,60 +587,70 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
             )}
           </div>
       </CollapsibleSection>
+
     </div>
   );
 }
 
-function SuggestionCard({ suggestion, index }: { suggestion: PointsSwapSuggestion; index: number }) {
-  const { current, upgrade, pointsDelta, priceDelta, type } = suggestion;
+function SuggestionCard({ suggestion }: { suggestion: PointsSwapSuggestion }) {
+  const { current, upgrade, pointsDelta, priceDelta, timeDelta, qualifiedBy } = suggestion;
+
+  // For constructors the name and the team are the same string, so the second line would
+  // just repeat the first.
+  const side = (p: typeof current, tone: string, align: string) => (
+    <div className={`min-w-0 ${align}`}>
+      <div className={`font-medium truncate ${tone}`}>
+        <span className="sm:hidden">{p.short}</span>
+        <span className="hidden sm:inline">{p.name}</span>
+      </div>
+      {p.teamName !== p.name && (
+        <div className="text-xs text-zinc-500 truncate">{p.teamName}</div>
+      )}
+      <div className="text-xs text-zinc-400 font-mono mt-1 truncate">
+        {p.overallPoints} pts · {formatPrice(p.price)}
+      </div>
+    </div>
+  );
+
+  const badge =
+    qualifiedBy === "pace"
+      ? { label: "Faster in Practice", className: "bg-sky-900/50 text-sky-300" }
+      : qualifiedBy === "both"
+        ? { label: "Points + Practice", className: "bg-emerald-900/50 text-emerald-300" }
+        : { label: "More points", className: "bg-zinc-700/50 text-zinc-400" };
 
   return (
     <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <span className="text-zinc-600 text-sm font-mono w-6 shrink-0">
-            #{index + 1}
-          </span>
-
-          {/* Current */}
-          <div className="min-w-0">
-            <div className="font-medium text-red-400 truncate">{current.name}</div>
-            <div className="text-xs text-zinc-500 truncate">{current.teamName}</div>
-          </div>
-
-          <div className="text-zinc-500 shrink-0 px-1">→</div>
-
-          {/* Upgrade */}
-          <div className="min-w-0">
-            <div className="font-medium text-emerald-400 truncate">{upgrade.name}</div>
-            <div className="text-xs text-zinc-500 truncate">{upgrade.teamName}</div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 shrink-0 text-right">
-          <div>
-            <div className="text-xs text-zinc-500">Points</div>
-            <div className="text-sm font-mono text-emerald-400">
-              +{pointsDelta} pts
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-zinc-500">Cost</div>
-            <div className={`text-sm font-mono ${priceDelta <= 0 ? "text-emerald-400" : "text-yellow-400"}`}>
-              {priceDelta <= 0 ? "" : "+"}{priceDelta.toFixed(1)}M
-            </div>
-          </div>
-        </div>
+      {/* Who for whom. The absolute figures sit with the person they describe, so the
+          deltas below are the only place a number is stated twice — as a difference. */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+        {side(current, "text-red-400", "text-left")}
+        <div className="text-zinc-600 pt-0.5">→</div>
+        {side(upgrade, "text-emerald-400", "text-right")}
       </div>
 
-      {/* Detail line */}
-      <div className="mt-3 flex gap-3 sm:gap-6 flex-wrap text-xs text-zinc-500">
-        <span className={`px-1.5 py-0.5 rounded text-xs ${type === "driver" ? "bg-zinc-700/50" : "bg-zinc-700/50 text-zinc-400"}`}>
-          {type === "driver" ? "Driver" : "Constructor"}
+      <div className="mt-3 pt-3 border-t border-zinc-700/50 flex items-center gap-4 flex-wrap">
+        <Delta label="Points" value={`${pointsDelta > 0 ? "+" : ""}${pointsDelta}`} unit="pts"
+          tone={pointsDelta > 0 ? "text-emerald-400" : "text-zinc-500"} />
+        {timeDelta !== undefined && (
+          <Delta label="Practice" value={`-${timeDelta.toFixed(3)}`} unit="s" tone="text-emerald-400" />
+        )}
+        <Delta label="Cost" value={`${priceDelta <= 0 ? "" : "+"}${priceDelta.toFixed(1)}`} unit="M"
+          tone={priceDelta <= 0 ? "text-emerald-400" : "text-yellow-400"} />
+        <span className={`ml-auto px-2 py-0.5 rounded text-xs shrink-0 ${badge.className}`}>
+          {badge.label}
         </span>
-        <span>{current.name}: {current.overallPoints} pts / {formatPrice(current.price)}</span>
-        <span>{upgrade.name}: {upgrade.overallPoints} pts / {formatPrice(upgrade.price)}</span>
+      </div>
+    </div>
+  );
+}
+
+function Delta({ label, value, unit, tone }: { label: string; value: string; unit: string; tone: string }) {
+  return (
+    <div className="leading-tight">
+      <div className="text-[10px] uppercase tracking-wide text-zinc-600">{label}</div>
+      <div className={`font-mono text-base ${tone}`}>
+        {value}<span className="text-xs text-zinc-500 ml-0.5">{unit}</span>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getTeamSuggestions, loadTeams, saveTeams, makeTeam, MAX_TEAMS } from "./team-optimizer";
+import { getTeamSuggestions, mergePracticeSwaps, loadTeams, saveTeams, makeTeam, MAX_TEAMS } from "./team-optimizer";
 import type { FantasyDriver, FantasyConstructor } from "./types";
 
 // Pinned on purpose: renaming this key would orphan every saved team.
@@ -120,7 +120,7 @@ describe("team storage", () => {
 
     const store = loadTeams();
 
-    expect(store.version).toBe(2);
+    expect(store.version).toBe(3);
     expect(store.teams).toHaveLength(1);
     expect(store.teams[0]!.driverIds).toEqual([1, 2, 3]);
     expect(store.teams[0]!.constructorIds).toEqual([100]);
@@ -129,7 +129,7 @@ describe("team storage", () => {
 
   it("round-trips a multi-team store", () => {
     const original = {
-      version: 2 as const,
+      version: 3 as const,
       teams: [makeTeam(0), { ...makeTeam(1), name: "Mini League", driverIds: [7, null, 9] }],
       activeId: makeTeam(1).id,
     };
@@ -144,7 +144,7 @@ describe("team storage", () => {
 
   it("never returns more teams than the cap", () => {
     saveTeams({
-      version: 2,
+      version: 3,
       teams: [makeTeam(0), makeTeam(1), makeTeam(2), makeTeam(3), makeTeam(4)],
       activeId: makeTeam(0).id,
     });
@@ -159,8 +159,71 @@ describe("team storage", () => {
     expect(loadTeams().teams[0]!.driverIds).toEqual([]);
   });
 
+  it("does not read a v2 remaining budget as a correction", () => {
+    // v2 stored `budget` meaning "remaining budget" — a different quantity. Carrying the
+    // number over would silently shift the team's effective cost by that amount.
+    stored[STORAGE_KEY] = JSON.stringify({
+      version: 2,
+      teams: [{ id: "team-1", name: "Team 1", driverIds: [1], constructorIds: [100], budget: 7.5 }],
+      activeId: "team-1",
+    });
+
+    const store = loadTeams();
+
+    expect(store.version).toBe(3);
+    expect(store.teams[0]!.budgetCorrection).toBe(0);
+    expect(store.teams[0]!.driverIds).toEqual([1]);
+  });
+
   it("falls back to the first team when the stored active id is gone", () => {
-    saveTeams({ version: 2, teams: [makeTeam(0)], activeId: "team-does-not-exist" });
+    saveTeams({ version: 3, teams: [makeTeam(0)], activeId: "team-does-not-exist" });
     expect(loadTeams().activeId).toBe(makeTeam(0).id);
+  });
+});
+
+describe("mergePracticeSwaps", () => {
+  const drivers = [
+    driver({ id: 1, tla: "AAA", lastName: "Alpha", overallPoints: 100, price: 20 }),
+    driver({ id: 2, tla: "BBB", lastName: "Bravo", overallPoints: 130, price: 21 }),
+    driver({ id: 3, tla: "CCC", lastName: "Charlie", overallPoints: 40, price: 19 }),
+  ];
+
+  function analysis(acronym: string) {
+    return { nameAcronym: acronym } as never;
+  }
+
+  function swap(out: string, into: string, timeDelta: number) {
+    return { driverOut: analysis(out), driverIn: analysis(into), timeDelta } as never;
+  }
+
+  it("keeps points entries first and appends pace-only ones by time gained", () => {
+    const points = getTeamSuggestions([1], [], drivers, [], 100);
+    // Charlie is slower on points but quicker on track; Bravo qualifies both ways.
+    const merged = mergePracticeSwaps(
+      points,
+      [swap("AAA", "CCC", 0.4), swap("AAA", "BBB", 0.2)],
+      [],
+      drivers,
+      [],
+    );
+
+    expect(merged.map((s) => s.qualifiedBy)).toEqual(["both", "pace"]);
+    expect(merged[0]!.upgrade.id).toBe(2);
+    expect(merged[0]!.timeDelta).toBe(0.2);
+    expect(merged[1]!.upgrade.id).toBe(3);
+  });
+
+  it("does not duplicate an entry that qualifies on both grounds", () => {
+    const points = getTeamSuggestions([1], [], drivers, [], 100);
+    const merged = mergePracticeSwaps(points, [swap("AAA", "BBB", 0.3)], [], drivers, []);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.qualifiedBy).toBe("both");
+    expect(merged[0]!.pointsDelta).toBe(30);
+  });
+
+  it("skips a practice driver that has no Fantasy entry", () => {
+    const merged = mergePracticeSwaps([], [swap("AAA", "ZZZ", 0.5)], [], drivers, []);
+    expect(merged).toHaveLength(0);
   });
 });

@@ -1,5 +1,13 @@
-import type { FantasyDriver, FantasyConstructor, FantasyTeam, TeamStore, PointsSwapSuggestion } from "./types";
-import { BUDGET_MIN } from "./config";
+import type {
+  FantasyDriver,
+  FantasyConstructor,
+  FantasyTeam,
+  TeamStore,
+  PointsSwapSuggestion,
+  SwapRecommendation,
+  ConstructorSwapRecommendation,
+} from "./types";
+import { canonicalTeam } from "./team-names";
 
 const STORAGE_KEY = "f1-fantasy-team";
 
@@ -11,13 +19,13 @@ export function makeTeam(index: number): FantasyTeam {
     name: `Team ${index + 1}`,
     driverIds: [],
     constructorIds: [],
-    budget: BUDGET_MIN,
+    budgetCorrection: 0,
   };
 }
 
 function emptyStore(): TeamStore {
   const first = makeTeam(0);
-  return { version: 2, teams: [first], activeId: first.id };
+  return { version: 3, teams: [first], activeId: first.id };
 }
 
 function isSlotArray(value: unknown): value is (number | null)[] {
@@ -35,12 +43,18 @@ function parseTeam(raw: unknown, index: number): FantasyTeam | null {
     name: typeof t.name === "string" && t.name ? t.name : fallback.name,
     driverIds: t.driverIds,
     constructorIds: t.constructorIds,
-    budget: typeof t.budget === "number" && Number.isFinite(t.budget) ? t.budget : fallback.budget,
+    // A v2 store carries `budget`, which was a remaining budget — a different quantity,
+    // not convertible into a correction. It is dropped rather than misread; the user
+    // re-enters it once and it then stays valid across swaps, which the old one did not.
+    budgetCorrection:
+      typeof t.budgetCorrection === "number" && Number.isFinite(t.budgetCorrection)
+        ? t.budgetCorrection
+        : fallback.budgetCorrection,
   };
 }
 
-// Reads both the v2 store and the pre-v2 shape (a bare {driverIds, constructorIds}),
-// so an existing single team survives the upgrade instead of being silently dropped.
+// Reads the v3 store, the v2 store, and the original bare {driverIds, constructorIds},
+// so an existing line-up survives every upgrade instead of being silently dropped.
 export function loadTeams(): TeamStore {
   if (typeof window === "undefined") return emptyStore();
 
@@ -62,11 +76,11 @@ export function loadTeams(): TeamStore {
       const activeId = typeof store.activeId === "string" && teams.some((t) => t.id === store.activeId)
         ? store.activeId
         : teams[0]!.id;
-      return { version: 2, teams, activeId };
+      return { version: 3, teams, activeId };
     }
 
     const legacy = parseTeam(store, 0);
-    if (legacy) return { version: 2, teams: [legacy], activeId: legacy.id };
+    if (legacy) return { version: 3, teams: [legacy], activeId: legacy.id };
 
     return emptyStore();
   } catch {
@@ -104,6 +118,7 @@ export function getTeamSuggestions(
         current: {
           id: current.id,
           name: `${current.firstName} ${current.lastName}`,
+          short: current.tla.toUpperCase(),
           teamName: current.teamName,
           price: current.price,
           overallPoints: current.overallPoints,
@@ -111,12 +126,14 @@ export function getTeamSuggestions(
         upgrade: {
           id: candidate.id,
           name: `${candidate.firstName} ${candidate.lastName}`,
+          short: candidate.tla.toUpperCase(),
           teamName: candidate.teamName,
           price: candidate.price,
           overallPoints: candidate.overallPoints,
         },
         pointsDelta: candidate.overallPoints - current.overallPoints,
         priceDelta: candidate.price - current.price,
+        qualifiedBy: "points",
       });
     }
   }
@@ -135,6 +152,7 @@ export function getTeamSuggestions(
         current: {
           id: current.id,
           name: current.name,
+          short: current.name,
           teamName: current.name,
           price: current.price,
           overallPoints: current.overallPoints,
@@ -142,16 +160,107 @@ export function getTeamSuggestions(
         upgrade: {
           id: candidate.id,
           name: candidate.name,
+          short: candidate.name,
           teamName: candidate.name,
           price: candidate.price,
           overallPoints: candidate.overallPoints,
         },
         pointsDelta: candidate.overallPoints - current.overallPoints,
         priceDelta: candidate.price - current.price,
+        qualifiedBy: "points",
       });
     }
   }
 
   suggestions.sort((a, b) => b.pointsDelta - a.pointsDelta);
   return suggestions;
+}
+
+/**
+ * Folds practice-based swaps into the points-based list.
+ *
+ * The two qualify on different grounds — more season points, or a quicker lap this
+ * weekend — and those are not comparable quantities. Rather than invent an exchange rate
+ * between them, every entry carries the reason it is listed, and the order is: points
+ * upgrades first by points gained, then the pace-only ones by time gained. An entry that
+ * qualifies both ways is merged, not duplicated.
+ */
+export function mergePracticeSwaps(
+  pointsSuggestions: PointsSwapSuggestion[],
+  driverSwaps: SwapRecommendation[],
+  constructorSwaps: ConstructorSwapRecommendation[],
+  allDrivers: FantasyDriver[],
+  allConstructors: FantasyConstructor[],
+): PointsSwapSuggestion[] {
+  const byTla = new Map(allDrivers.map((d) => [d.tla.toUpperCase(), d]));
+  const byTeam = new Map(allConstructors.map((c) => [canonicalTeam(c.name), c]));
+
+  const merged = new Map<string, PointsSwapSuggestion>();
+  const key = (s: PointsSwapSuggestion) => `${s.type}:${s.current.id}:${s.upgrade.id}`;
+  for (const s of pointsSuggestions) merged.set(key(s), s);
+
+  function add(
+    type: "driver" | "constructor",
+    from: FantasyDriver | FantasyConstructor | undefined,
+    to: FantasyDriver | FantasyConstructor | undefined,
+    label: (p: FantasyDriver | FantasyConstructor) => string,
+    teamOf: (p: FantasyDriver | FantasyConstructor) => string,
+    timeDelta: number,
+  ) {
+    // A driver with no Fantasy entry cannot be swapped in the game, so there is nothing
+    // to suggest — skipping is the only correct move.
+    if (!from || !to) return;
+
+    const candidate: PointsSwapSuggestion = {
+      type,
+      current: { id: from.id, name: label(from), short: shortOf(from), teamName: teamOf(from), price: from.price, overallPoints: from.overallPoints },
+      upgrade: { id: to.id, name: label(to), short: shortOf(to), teamName: teamOf(to), price: to.price, overallPoints: to.overallPoints },
+      pointsDelta: to.overallPoints - from.overallPoints,
+      priceDelta: to.price - from.price,
+      timeDelta,
+      qualifiedBy: "pace",
+    };
+
+    const existing = merged.get(key(candidate));
+    if (existing) {
+      merged.set(key(candidate), { ...existing, timeDelta, qualifiedBy: "both" });
+    } else {
+      merged.set(key(candidate), candidate);
+    }
+  }
+
+  const driverName = (p: FantasyDriver | FantasyConstructor) =>
+    "firstName" in p ? `${p.firstName} ${p.lastName}` : p.name;
+  const shortOf = (p: FantasyDriver | FantasyConstructor) =>
+    "tla" in p ? p.tla.toUpperCase() : p.name;
+
+  for (const swap of driverSwaps) {
+    add(
+      "driver",
+      byTla.get(swap.driverOut.nameAcronym.toUpperCase()),
+      byTla.get(swap.driverIn.nameAcronym.toUpperCase()),
+      driverName,
+      (p) => ("teamName" in p ? p.teamName : p.name),
+      swap.timeDelta,
+    );
+  }
+
+  for (const swap of constructorSwaps) {
+    add(
+      "constructor",
+      byTeam.get(canonicalTeam(swap.constructorOut.name)),
+      byTeam.get(canonicalTeam(swap.constructorIn.name)),
+      driverName,
+      driverName,
+      swap.timeDelta,
+    );
+  }
+
+  return [...merged.values()].sort((a, b) => {
+    const aPoints = a.qualifiedBy !== "pace";
+    const bPoints = b.qualifiedBy !== "pace";
+    if (aPoints !== bPoints) return aPoints ? -1 : 1;
+    if (aPoints) return b.pointsDelta - a.pointsDelta;
+    return (b.timeDelta ?? 0) - (a.timeDelta ?? 0);
+  });
 }
