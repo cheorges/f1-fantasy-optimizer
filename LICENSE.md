@@ -2,7 +2,7 @@
 
 ## Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
 
-Copyright (c) 2026 Gregor von Flue
+Copyright (c) 2026 cheorges
 
 This work is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License.
 
