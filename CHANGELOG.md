@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] - 2026-08-18
+
+### Changed
+
+- The Teams budget slider sets your **available budget** — the free figure the official Fantasy app shows — instead of a correction against market value. The old slider expressed how much the squad had gained since purchase, which on a squad up 32M could not even be entered: it stopped at 15M. The new one runs 0-25M and needs no negative range, because free budget is what is left over.
+- Market value and spend against the cap are shown beside the slider; the "over cap" state is gone, since it can no longer occur when the free budget is the input
+- Team storage is at v4. A v3 budget correction is dropped rather than read as an available budget, so **the figure has to be entered once per team after upgrading** — the line-up itself survives
+- The home budget slider runs 0-25M rather than 0.1-15M. It starts at 0 because that asks a real question: the engine keeps swaps costing no more than the budget, so 0 lists whoever is quicker without costing more
+- The Team Selection header shows the squad's market value instead of its spend against the cap, so the figure describing the line-up sits with it and survives collapsing the section
+
 ## [1.1.0] - 2026-08-17
 
 ### Added

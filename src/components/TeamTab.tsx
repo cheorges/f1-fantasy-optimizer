@@ -9,7 +9,7 @@ import { generateRecommendations, generateConstructorRecommendations } from "@/l
 import { getLiveSessionMessage } from "@/lib/live-session";
 import { canonicalTeam } from "@/lib/team-names";
 import { formatPrice } from "@/lib/format";
-import { CORRECTION_MIN, CORRECTION_MAX } from "@/lib/config";
+import { AVAILABLE_MIN, AVAILABLE_MAX } from "@/lib/config";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import Pagination from "@/components/Pagination";
 import BudgetSlider from "@/components/BudgetSlider";
@@ -40,7 +40,7 @@ function filled(ids: (number | null)[]): number[] {
 
 function initialStore(): TeamStore {
   const first = makeTeam(0);
-  return { version: 3, teams: [first], activeId: first.id };
+  return { version: 4, teams: [first], activeId: first.id };
 }
 
 export default function TeamTab({ drivers, constructors, round, loading }: TeamTabProps) {
@@ -181,12 +181,12 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
     return cost;
   }, [driverIds, constructorIds, drivers, constructors]);
 
-  // The 100M cap applies to what was paid, but the app only sees today's prices. The
-  // correction bridges the two, and the remaining budget then follows — so it moves on
-  // its own when a driver is swapped, which a hand-entered remaining budget never did.
-  const effectiveCost = teamCost - activeTeam.budgetCorrection;
-  const remainingBudget = BUDGET_CAP - effectiveCost;
-  const overCap = effectiveCost > BUDGET_CAP;
+  // The free budget is the input, so the spend against the cap follows from it rather
+  // than from `teamCost`. Market value is today's price of the squad and says nothing
+  // about the cap, which applies to what was paid — the two are shown side by side and
+  // deliberately not reconciled.
+  const remainingBudget = activeTeam.availableBudget;
+  const effectiveCost = BUDGET_CAP - remainingBudget;
 
   // Fetched without a session_key, so the API picks the latest practice session — the same
   // default the home page lands on. Runs once, not on every toggle.
@@ -428,18 +428,17 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       {/* Team Selection */}
       <CollapsibleSection
         title="Team Selection"
-        info="Select your 5 drivers and 2 constructors. The budget can exceed $100M for simulation purposes. Your teams are saved automatically."
+        info="Select your 5 drivers and 2 constructors, matching the team you actually field. Your teams are saved automatically."
         collapsed={teamCollapsed}
         onToggle={() => setTeamCollapsed((v) => !v)}
         headerRight={
-          <div className="flex items-center gap-3">
-            <span className={`text-sm font-mono font-semibold ${overCap ? "text-amber-400" : "text-zinc-200"}`}>
-              {formatPrice(effectiveCost)} / {formatPrice(BUDGET_CAP)}
-            </span>
-            {overCap && (
-              <span className="text-xs text-amber-400">over cap</span>
-            )}
-          </div>
+          /* The market value of the line-up below, so it stays readable with the section
+             collapsed. Not a cap figure: the cap applies to purchase prices, this is
+             today's. */
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-xs text-zinc-500">Market value</span>
+            <span className="text-sm font-mono font-semibold text-zinc-200">{formatPrice(teamCost)}</span>
+          </span>
         }
       >
           <div className="p-3 sm:p-4">
@@ -502,7 +501,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       {/* Optimization Suggestions */}
       <CollapsibleSection
         title="Upgrade Suggestions"
-        info="Which available drivers and constructors beat one you hold, within your remaining budget. By default that means more Fantasy points. Switch on Include FP and anyone who was quicker in the latest practice session joins the same list, marked as such — a driver can be fast this weekend and still be behind on points. Points and lap times are shown separately rather than combined into one score, because there is no honest exchange rate between them."
+        info="Which available drivers and constructors beat one you hold, within your available budget. By default that means more Fantasy points. Switch on Include FP and anyone who was quicker in the latest practice session joins the same list, marked as such — a driver can be fast this weekend and still be behind on points. Points and lap times are shown separately rather than combined into one score, because there is no honest exchange rate between them."
         collapsed={suggestionsCollapsed}
         onToggle={() => setSuggestionsCollapsed((v) => !v)}
         headerRight={
@@ -512,8 +511,8 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
         }
       >
           <div className="p-3 sm:p-4">
-            {/* The two controls that shape this list live with it: the correction only
-                exists so the budget below is right, and the budget decides what is listed. */}
+            {/* The two controls that shape this list live with it: the budget decides what
+                is affordable, the switch decides what counts as an upgrade. */}
             <div className="pb-4 mb-4 border-b border-zinc-800 flex flex-col gap-4">
               <ToggleSwitch
                 checked={includePractice}
@@ -523,30 +522,23 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
               />
 
               <div>
-                <div className="text-sm text-zinc-200 mb-1">Budget Correction</div>
+                <div className="text-sm text-zinc-200 mb-1">Available Budget</div>
                 <BudgetSlider
-                  value={activeTeam.budgetCorrection}
-                  onChange={(budgetCorrection) => { updateActiveTeam({ budgetCorrection }); setSuggestionPage(0); }}
+                  value={activeTeam.availableBudget}
+                  onChange={(availableBudget) => { updateActiveTeam({ availableBudget }); setSuggestionPage(0); }}
                   disabled={false}
-                  label="Value gained since purchase"
-                  min={CORRECTION_MIN}
-                  max={CORRECTION_MAX}
+                  label="Free budget your Fantasy app shows"
+                  min={AVAILABLE_MIN}
+                  max={AVAILABLE_MAX}
                 />
-                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <div className="text-zinc-500">Market value</div>
-                    <div className="text-zinc-300 font-mono">{formatPrice(teamCost)}</div>
-                  </div>
-                  <div>
-                    <div className="text-zinc-500">Effectively spent</div>
-                    <div className="text-zinc-300 font-mono">{formatPrice(effectiveCost)}</div>
-                  </div>
-                  <div>
-                    <div className="text-zinc-500">Remaining</div>
-                    <div className={`font-mono ${remainingBudget < 0 ? "text-amber-400" : "text-emerald-400"}`}>
-                      {formatPrice(remainingBudget)}
-                    </div>
-                  </div>
+                {/* Neither "remaining" nor market value here: the first is the slider's
+                    own value shown above in full size, the second sits in the Team
+                    Selection header with the line-up it describes. */}
+                <div className="mt-3 flex items-baseline gap-1.5 text-xs">
+                  <span className="text-zinc-500">Spent against the cap</span>
+                  <span className="text-zinc-300 font-mono">
+                    {formatPrice(effectiveCost)} / {formatPrice(BUDGET_CAP)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -568,7 +560,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
               </div>
             ) : mergedSuggestions.length === 0 ? (
               <div className="text-center py-8 text-zinc-500 text-sm">
-                No upgrades available for this budget. Try increasing your remaining budget.
+                No upgrades within your available budget. Try raising it if the figure is out of date.
               </div>
             ) : (
               <>

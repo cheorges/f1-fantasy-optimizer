@@ -19,13 +19,13 @@ export function makeTeam(index: number): FantasyTeam {
     name: `Team ${index + 1}`,
     driverIds: [],
     constructorIds: [],
-    budgetCorrection: 0,
+    availableBudget: 0,
   };
 }
 
 function emptyStore(): TeamStore {
   const first = makeTeam(0);
-  return { version: 3, teams: [first], activeId: first.id };
+  return { version: 4, teams: [first], activeId: first.id };
 }
 
 function isSlotArray(value: unknown): value is (number | null)[] {
@@ -43,17 +43,18 @@ function parseTeam(raw: unknown, index: number): FantasyTeam | null {
     name: typeof t.name === "string" && t.name ? t.name : fallback.name,
     driverIds: t.driverIds,
     constructorIds: t.constructorIds,
-    // A v2 store carries `budget`, which was a remaining budget — a different quantity,
-    // not convertible into a correction. It is dropped rather than misread; the user
-    // re-enters it once and it then stays valid across swaps, which the old one did not.
-    budgetCorrection:
-      typeof t.budgetCorrection === "number" && Number.isFinite(t.budgetCorrection)
-        ? t.budgetCorrection
-        : fallback.budgetCorrection,
+    // Older stores carry a different quantity under a different name: v3 a
+    // `budgetCorrection` against market value, v2 a `budget` that was a remaining budget.
+    // Neither converts without the prices of the day it was entered, so both are dropped
+    // rather than misread — the line-up survives and the one number is re-entered.
+    availableBudget:
+      typeof t.availableBudget === "number" && Number.isFinite(t.availableBudget)
+        ? t.availableBudget
+        : fallback.availableBudget,
   };
 }
 
-// Reads the v3 store, the v2 store, and the original bare {driverIds, constructorIds},
+// Reads the v4 store, the older v3/v2 ones, and the original bare {driverIds, constructorIds},
 // so an existing line-up survives every upgrade instead of being silently dropped.
 export function loadTeams(): TeamStore {
   if (typeof window === "undefined") return emptyStore();
@@ -76,11 +77,11 @@ export function loadTeams(): TeamStore {
       const activeId = typeof store.activeId === "string" && teams.some((t) => t.id === store.activeId)
         ? store.activeId
         : teams[0]!.id;
-      return { version: 3, teams, activeId };
+      return { version: 4, teams, activeId };
     }
 
     const legacy = parseTeam(store, 0);
-    if (legacy) return { version: 3, teams: [legacy], activeId: legacy.id };
+    if (legacy) return { version: 4, teams: [legacy], activeId: legacy.id };
 
     return emptyStore();
   } catch {

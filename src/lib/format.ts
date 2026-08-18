@@ -7,8 +7,8 @@ export function formatLapTime(seconds: number | null): string {
 
 export function formatPrice(price: number | null): string {
   if (price === null) return "-";
-  // Sign before the currency, not after it: the budget correction and the remaining
-  // budget can both go negative, and "$-5.7M" reads as a typo.
+  // Sign before the currency, not after it: a price delta is negative whenever the
+  // replacement is cheaper, and "$-5.7M" reads as a typo.
   const sign = price < 0 ? "-" : "";
   return `${sign}$${Math.abs(price).toFixed(1)}M`;
 }
