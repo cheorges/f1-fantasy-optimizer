@@ -8,12 +8,12 @@ which swaps actually buy you pace, and where prices are heading. Built for the p
 **Home** — every driver ranked by practice pace, with sector times, top speed, price and a
 value score. The heading names the session and the circuit the ranking is based on, so it is
 never ambiguous which data you are looking at. Below it you pick one driver or constructor
-and a budget (0.1M–15M), and get the entries that would replace them within it, sorted by
+and a budget (0-25M), and get the entries that would replace them within it, sorted by
 biggest lap-time gain. Only entries with at least one affordable quicker replacement are
 offered. Nothing is refetched while you drag — the swaps are computed in the browser.
 
 **Teams** — enter up to three fantasy teams (5 drivers + 2 constructors each), name them,
-and give each its own budget correction (see [Budget correction](#budget-correction)). Each
+and give each its own available budget (see [Available budget](#available-budget)). Each
 team gets its own upgrade suggestions, ranked by season points gained, and a switch that
 folds practice pace into the same list. Teams are saved in the browser and survive a reload.
 
@@ -104,29 +104,33 @@ Feeds are validated with zod and fail loudly on a shape change rather than silen
 producing `NaN`. One consequence worth knowing: OpenF1 returns HTTP 401 while a session is
 live, which the app surfaces as a short notice instead of an error.
 
-### Budget correction
+### Available budget
 
 The game's 100M cap applies to what you **paid** for your squad. The app only ever sees
 today's prices, and the difference between the two is the value your drivers have gained
-since you bought them — invisible from the outside. A squad reading 107.5M here can still
+since you bought them — invisible from the outside. A squad reading 132M here can still
 have budget free in the official app.
 
-So each team carries one number you enter yourself: how much more the squad is worth today
-than what was paid for it. Everything else follows from it.
+Rather than have you work that difference out, each team carries the figure the official
+app already shows you: **how much budget you have free.** The spend against the cap follows
+from it.
 
 ```
-Market value (app computes)   $107.5M
-Budget correction (you)        - $8.9M
-──────────────────────────────────────
-Effective spend                 $98.6M / $100M
-Remaining budget (app)           $1.4M   → filters the suggestions
+Available budget (you)      $1.4M     ← copied from the official app
+Spent against the cap      $98.6M     = 100 - 1.4
+Market value today        $132.0M     ← computed, information only
 ```
 
-It is a property of the team, not of a moment, so it stays valid while you swap drivers
-around — unlike a remaining-budget figure, which goes stale the instant anything changes.
-Teams saved before this existed carry a remaining budget instead, which is a different
-quantity and cannot be converted, so it is dropped: **the correction has to be entered once
-per team.**
+Market value is therefore decoupled from the cap: 132M is not "over cap", it is simply what
+the squad is worth today. The slider runs 0-25M with no negative range, because free budget
+is what is left over — and it starts at 0, since a squad spent right up to the cap has
+exactly none.
+
+This page reproduces a team as it stands; it does not execute swaps. The line-up and the
+free budget are read off the same screen, so when you change one you re-read the other.
+Teams saved before this existed carry a different quantity that cannot be converted without
+the prices of the day it was entered, so it is dropped: **the figure has to be entered once
+per team.** The line-up itself survives.
 
 ### Price trend
 

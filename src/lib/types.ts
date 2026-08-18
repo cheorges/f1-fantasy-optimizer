@@ -157,17 +157,19 @@ export interface FantasyTeam {
   // Slot arrays: null means an empty slot, so clearing one doesn't shift the others.
   driverIds: (number | null)[];
   constructorIds: (number | null)[];
-  // How much more the squad is worth today than what was actually paid for it. The app
-  // only ever sees current prices, but the game's 100M cap applies to purchase prices —
-  // so this is the one number it cannot derive and the user has to supply. Everything
-  // else (effective spend, remaining budget) follows from it.
-  budgetCorrection: number;
+  // The free budget the official Fantasy app reports, copied across by hand. The app
+  // cannot derive it: the 100M cap applies to purchase prices and the app only ever sees
+  // today's, and the gap between the two is invisible from the outside.
+  // This page reproduces a team as it stands rather than executing swaps, so the figure
+  // is read off the same screen as the line-up and re-read whenever that changes.
+  availableBudget: number;
 }
 
 export interface TeamStore {
-  // 3 since the correction replaced a stored "remaining budget", which meant something
-  // else entirely and must not be read as a correction.
-  version: 3;
+  // 4 since the stored figure became the available budget. v3 held a correction against
+  // market value — a different quantity, and not convertible without the prices of the
+  // day it was entered.
+  version: 4;
   teams: FantasyTeam[];
   activeId: string;
 }
