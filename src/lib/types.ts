@@ -189,3 +189,36 @@ export interface PointsSwapSuggestion {
   // reason is shown rather than folded into a single score.
   qualifiedBy: "points" | "pace" | "both";
 }
+
+// One row of the live leaderboard. Lap times stay strings: the feed sends "1:22.687" and the
+// table shows it unchanged, so a round trip through seconds could only lose precision.
+export interface LiveDriver {
+  position: number;
+  driverNumber: string;
+  acronym: string;
+  fullName: string;
+  teamName: string;
+  teamColour: string;
+  bestLapTime: string | null;
+  gapToLeader: string | null;
+  laps: number;
+  inPit: boolean;
+}
+
+export interface LiveSession {
+  // The feed keeps serving the last session's closing state, which looks identical until
+  // you read the status.
+  live: boolean;
+  // The feed's own word: Inactive, Started, Aborted, Finished, Finalised, Ends.
+  status: string;
+  sessionName: string;
+  meetingName: string;
+  // AllClear, Yellow, Red, SCDeployed, VSCDeployed, VSCEnding.
+  trackStatus: string;
+  remaining: string | null;
+  fastestLap: string | null;
+  // Who set it. Not position 1: in a race that is race position.
+  fastestDriverNumber: string | null;
+  fetchedAt: number;
+  drivers: LiveDriver[];
+}

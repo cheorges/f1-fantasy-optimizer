@@ -5,9 +5,9 @@ import type { DriverAnalysis, ConstructorAnalysis } from "@/lib/types";
 import type { DriversResponse } from "@/lib/api-types";
 import { isDriversResponse } from "@/lib/api-types";
 import { generateRecommendations, generateConstructorRecommendations } from "@/lib/swaps";
-import { getLiveSessionMessage, RETRY_INTERVAL_MS, type StaleState } from "@/lib/live-session";
+import { getLiveSessionMessage, RETRY_INTERVAL_MS } from "@/lib/live-session";
 import { readCache, writeCache } from "@/lib/browser-cache";
-import { useAppData } from "@/components/AppShell";
+import { useAppData } from "@/components/app-data";
 import StaleDataBanner from "@/components/StaleDataBanner";
 import SessionSelector from "@/components/SessionSelector";
 import DriverTable, { COLUMN_OPTIONS, type DriverColumn } from "@/components/DriverTable";
@@ -21,7 +21,8 @@ import Pagination from "@/components/Pagination";
 const PAGE_SIZE = 10;
 
 export default function Home() {
-  const { sessions, loadingSessions, meeting, priceRound, setError, staleSessions } = useAppData();
+  const { sessions, loadingSessions, meeting, priceRound, setError, staleSessions, staleDrivers, setStaleDrivers } =
+    useAppData();
 
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
   const [drivers, setDrivers] = useState<DriverAnalysis[]>([]);
@@ -35,7 +36,6 @@ export default function Home() {
   const [visibleColumns, setVisibleColumns] = useState<Set<DriverColumn>>(new Set());
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
-  const [staleDrivers, setStaleDrivers] = useState<StaleState | null>(null);
   const [driversRetry, setDriversRetry] = useState(0);
 
   // The sessions list can be replaced after the fact — the cache may restore a previous
@@ -94,7 +94,7 @@ export default function Home() {
 
     loadDrivers();
     return () => { cancelled = true; };
-  }, [selectedSession, driversRetry, setError]);
+  }, [selectedSession, driversRetry, setError, setStaleDrivers]);
 
   // Only while blocked, and on a steady cadence — see the same pattern in AppShell.
   const driversBlocked = staleDrivers !== null;

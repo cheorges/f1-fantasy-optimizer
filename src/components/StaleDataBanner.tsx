@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { formatCachedAt } from "@/lib/format";
 
 interface StaleDataBannerProps {
@@ -22,6 +23,12 @@ export default function StaleDataBanner({ savedAt }: StaleDataBannerProps) {
           : `OpenF1's free tier blocks practice data while a session is live. Showing the last data from ${formatCachedAt(savedAt)}.`}{" "}
         Retrying every 5 minutes. Prices and Teams are unaffected.
       </p>
+      <Link
+        href="/live"
+        className="inline-block mt-2.5 text-sm font-medium text-amber-100 underline decoration-amber-400/50 underline-offset-4 min-h-[44px] leading-[44px] sm:min-h-0 sm:leading-normal"
+      >
+        See the live timings
+      </Link>
     </div>
   );
 }
