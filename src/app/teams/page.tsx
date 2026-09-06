@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppData } from "@/components/AppShell";
+import { useAppData } from "@/components/app-data";
 import TeamTab from "@/components/TeamTab";
 
 export default function TeamsPage() {

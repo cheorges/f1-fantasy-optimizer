@@ -21,3 +21,12 @@ export async function getLiveSessionMessage(res: Response): Promise<string | nul
   }
   return null;
 }
+
+// `Inactive` is deliberately absent: a session that has not started still has everything
+// ahead of it. Lives here so the live page can import it without pulling in the WebSocket
+// client.
+const FINISHED_STATES = new Set(["Finished", "Finalised", "Ends"]);
+
+export function isSessionOver(status: string): boolean {
+  return FINISHED_STATES.has(status);
+}

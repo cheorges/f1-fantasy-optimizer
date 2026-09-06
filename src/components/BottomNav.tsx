@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAppData, isSessionRunning } from "@/components/app-data";
 
 interface NavItem {
   href: string;
@@ -55,13 +56,35 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+// Only while a session runs. The signal is one the app already has: OpenF1 blocks its free
+// tier for the session's duration. No extra polling, and no dead tab on a Tuesday.
+const LIVE_ITEM: NavItem = {
+  href: "/live",
+  label: "Live",
+  icon: (
+    <svg {...ICON_PROPS}>
+      <path d="M12 12h.01" />
+      <path d="M8.5 15.5a5 5 0 0 1 0-7" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M5.5 18.5a9 9 0 0 1 0-13" />
+      <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+    </svg>
+  ),
+};
+
 export default function BottomNav() {
   const pathname = usePathname();
+  const appData = useAppData();
+
+  // Keep it while the reader stands on it, so a session ending under them leaves the nav
+  // with something marked.
+  const showLive = isSessionRunning(appData) || pathname === "/live";
+  const items = showLive ? [...NAV_ITEMS, LIVE_ITEM] : NAV_ITEMS;
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)]">
       <div className="max-w-7xl mx-auto flex">
-        {NAV_ITEMS.map(({ href, label, icon }) => {
+        {items.map(({ href, label, icon }) => {
           const active = pathname === href;
           return (
             <Link
