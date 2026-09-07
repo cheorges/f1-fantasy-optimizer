@@ -6,6 +6,7 @@ import type {
   FantasyDriver,
   FantasyConstructor,
   PriceTrend,
+  LiveSession,
 } from "./types";
 
 const SESSION_NAME = "Practice 2";
@@ -218,4 +219,29 @@ export const MOCK_PRICES: { drivers: FantasyDriver[]; constructors: FantasyConst
     priceChange: c.priceChange!,
     trend: MOCK_TRENDS[i % MOCK_TRENDS.length]!,
   })),
+};
+
+// Real rows from the third practice session at Monza.
+export const MOCK_LIVE_SESSION: LiveSession = {
+  live: true,
+  status: "Started",
+  sessionName: "Practice 3",
+  meetingName: "Italian Grand Prix",
+  trackStatus: "AllClear",
+  remaining: "00:20:46",
+  fastestLap: "1:22.687",
+  fastestDriverNumber: "63",
+  fetchedAt: 0,
+  drivers: [
+    { position: 1, driverNumber: "63", acronym: "RUS", fullName: "George Russell", teamName: "Mercedes", teamColour: "00D7B6", bestLapTime: "1:22.687", gapToLeader: null, laps: 6, inPit: true },
+    { position: 2, driverNumber: "12", acronym: "ANT", fullName: "Kimi Antonelli", teamName: "Mercedes", teamColour: "00D7B6", bestLapTime: "1:23.032", gapToLeader: "+0.345", laps: 8, inPit: true },
+    { position: 3, driverNumber: "44", acronym: "HAM", fullName: "Lewis Hamilton", teamName: "Ferrari", teamColour: "ED1131", bestLapTime: "1:23.040", gapToLeader: "+0.353", laps: 12, inPit: false },
+    { position: 4, driverNumber: "16", acronym: "LEC", fullName: "Charles Leclerc", teamName: "Ferrari", teamColour: "ED1131", bestLapTime: "1:23.065", gapToLeader: "+0.378", laps: 11, inPit: false },
+    { position: 5, driverNumber: "3", acronym: "VER", fullName: "Max Verstappen", teamName: "Red Bull Racing", teamColour: "4781D7", bestLapTime: "1:23.100", gapToLeader: "+0.413", laps: 11, inPit: true },
+    { position: 6, driverNumber: "81", acronym: "PIA", fullName: "Oscar Piastri", teamName: "McLaren", teamColour: "F47600", bestLapTime: "1:23.342", gapToLeader: "+0.655", laps: 11, inPit: false },
+    { position: 7, driverNumber: "10", acronym: "GAS", fullName: "Pierre Gasly", teamName: "Alpine", teamColour: "00A1E8", bestLapTime: "1:23.416", gapToLeader: "+0.729", laps: 17, inPit: true },
+    { position: 8, driverNumber: "1", acronym: "NOR", fullName: "Lando Norris", teamName: "McLaren", teamColour: "F47600", bestLapTime: "1:23.431", gapToLeader: "+0.744", laps: 9, inPit: true },
+    { position: 9, driverNumber: "5", acronym: "BOR", fullName: "Gabriel Bortoleto", teamName: "Audi", teamColour: "F50537", bestLapTime: "1:23.561", gapToLeader: "+0.874", laps: 12, inPit: true },
+    { position: 10, driverNumber: "41", acronym: "LIN", fullName: "Arvid Lindblad", teamName: "Racing Bulls", teamColour: "6C98FF", bestLapTime: "1:23.641", gapToLeader: "+0.954", laps: 12, inPit: false },
+  ],
 };

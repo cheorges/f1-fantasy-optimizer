@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppData } from "@/components/AppShell";
+import { useAppData } from "@/components/app-data";
 import PriceTable from "@/components/PriceTable";
 
 export default function PricesPage() {

@@ -1,34 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { Session, Meeting, FantasyDriver, FantasyConstructor } from "@/lib/types";
 import type { SessionsResponse, PricesResponse } from "@/lib/api-types";
 import { isSessionsResponse } from "@/lib/api-types";
 import { getLiveSessionMessage, RETRY_INTERVAL_MS, type StaleState } from "@/lib/live-session";
+import { AppDataContext } from "@/components/app-data";
 import { readCache, writeCache } from "@/lib/browser-cache";
 import BottomNav from "@/components/BottomNav";
-
-interface AppData {
-  meeting: Meeting | null;
-  sessions: Session[];
-  loadingSessions: boolean;
-  priceDrivers: FantasyDriver[];
-  priceConstructors: FantasyConstructor[];
-  priceRound: number;
-  loadingPrices: boolean;
-  setError: (message: string | null) => void;
-  // Set while /api/sessions is blocked, so the home page can explain what it is showing.
-  staleSessions: StaleState | null;
-}
-
-const AppDataContext = createContext<AppData | null>(null);
-
-export function useAppData(): AppData {
-  const context = useContext(AppDataContext);
-  if (!context) throw new Error("useAppData must be used inside AppShell");
-  return context;
-}
 
 // Lives in the layout, so it stays mounted across route changes — sessions and prices
 // are fetched once per page load, not once per navigation.
@@ -38,6 +18,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [staleSessions, setStaleSessions] = useState<StaleState | null>(null);
+  // Owned by the home page, published here for the nav.
+  const [staleDrivers, setStaleDrivers] = useState<StaleState | null>(null);
   const [sessionsRetry, setSessionsRetry] = useState(0);
 
   const [priceDrivers, setPriceDrivers] = useState<FantasyDriver[]>([]);
@@ -122,6 +104,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
         loadingPrices,
         setError,
         staleSessions,
+        staleDrivers,
+        setStaleDrivers,
       }}
     >
       <div className="min-h-screen">
