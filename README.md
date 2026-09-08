@@ -21,6 +21,10 @@ folds practice pace into the same list. Teams are saved in the browser and survi
 round, ownership, points, and a trend indicator. See [Price trend](#price-trend) for what
 that indicator can and cannot tell you.
 
+**Live** — the official F1 leaderboard while a session is running: position, best lap, gap to
+the front, laps and who is in the pits, above a session clock and the flag status. The tab
+appears only while a session is on, because that is the only time it has anything to say.
+
 ## Getting Started
 
 ```bash
@@ -82,7 +86,7 @@ docker run -p 3000:3000 \
 
 ## How it works
 
-A single Next.js app — no separate backend, no database. Three routes share one client
+A single Next.js app — no separate backend, no database. Four routes share one client
 provider that lives in the layout, so session and price data are fetched once per page load
 rather than once per navigation.
 
@@ -93,8 +97,9 @@ rather than once per navigation.
 | [OpenF1](https://openf1.org) | Practice sessions, lap times, sector times, speed traps |
 | F1 Fantasy feed | Driver and constructor prices, ownership, points |
 | [Jolpica](https://api.jolpi.ca) (Ergast mirror) | Race calendar, to resolve the current round |
+| F1 live timing feed | The live leaderboard, while a session runs |
 
-All three are free tiers. Requests get up to three attempts, retrying 5xx and network
+All four are free. Requests get up to three attempts, retrying 5xx and network
 failures with exponential backoff and bounding each attempt at 10s, and responses are held
 in an in-memory cache (8 hours; past Fantasy
 rounds for 30 days, since the feed freezes them; 100 entries max). The cache is per process
@@ -102,7 +107,13 @@ and does not survive a restart — that is deliberate, the data is cheap to refe
 
 Feeds are validated with zod and fail loudly on a shape change rather than silently
 producing `NaN`. One consequence worth knowing: OpenF1 returns HTTP 401 while a session is
-live, which the app surfaces as a short notice instead of an error.
+live, which the app surfaces as a short notice instead of an error, and which is also what
+tells it a session is running and the Live tab is worth showing.
+
+The live timing feed is the exception to the zod rule: it is undocumented, it only fills a
+table, and a renamed field should cost its column rather than the page, so it is read field by
+field. It also refuses any request carrying a foreign Origin, so it is read server-side and
+cached for 5 seconds — one upstream connection per window, however many people are watching.
 
 ### Available budget
 
