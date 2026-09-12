@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.0] - 2026-09-08
+
+### Added
+
+- **Live tab.** While a session is running, `/live` shows the official F1 leaderboard: position, best lap, gap, laps and pit state, with the session clock, the flag status and the quickest lap of the session. The nav entry appears only while a session is on, so there is no dead tab the rest of the week
+- The "A session is running" banner now links to it
+
+### Changed
+
+- A running session no longer leaves the app with nothing to show. OpenF1's free tier blocks every endpoint from 30 minutes before a session until 30 minutes after, the archive included; the live data comes from F1's own timing feed instead, which needs no key and no account
+
 ## [1.2.0] - 2026-08-18
 
 ### Changed
