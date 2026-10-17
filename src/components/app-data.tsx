@@ -20,6 +20,9 @@ export interface AppData {
   // session started has this one set and `staleSessions` null.
   staleDrivers: StaleState | null;
   setStaleDrivers: (state: StaleState | null) => void;
+  // Set while /api/prices fails. Not a session signal: the Fantasy feed can be missing
+  // without anything running.
+  stalePrices: StaleState | null;
 }
 
 export const AppDataContext = createContext<AppData | null>(null);
