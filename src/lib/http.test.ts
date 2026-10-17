@@ -54,6 +54,51 @@ describe("fetchWithRetry", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("retries a 429 once the Retry-After delay has passed", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 429, headers: { "retry-after": "1" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = fetchWithRetry("http://x", 3);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    const res = await promise;
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a 429 without Retry-After on the normal backoff", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 429 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = fetchWithRetry("http://x", 3);
+    await vi.runAllTimersAsync();
+    const res = await promise;
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a 429 at once when Retry-After is too long to wait for", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 429, headers: { "retry-after": "60" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await fetchWithRetry("http://x", 3);
+    expect(res.status).toBe(429);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("throws after exhausting retries on persistent network errors", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn().mockRejectedValue(new Error("boom"));
