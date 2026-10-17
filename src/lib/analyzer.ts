@@ -1,4 +1,4 @@
-import { getDriverPerformances, getPracticeSessions, getLatestMeeting } from "./openf1";
+import { getDriverPerformances, getCompletedPracticeSessions, getLatestMeeting } from "./openf1";
 import { getDriverPrices, getConstructorPrices } from "./fantasy";
 import { canonicalTeam } from "./team-names";
 import type {
@@ -58,8 +58,8 @@ export async function analyzeDrivers(sessionKey?: number): Promise<DriverAnalysi
     const meeting = await getLatestMeeting();
     if (!meeting) return [];
 
-    const sessions = await getPracticeSessions(meeting.meeting_key);
-    // Use the latest practice session available
+    const sessions = await getCompletedPracticeSessions(meeting.meeting_key);
+    // The latest practice that has been run; on a sprint weekend that is always FP1
     const latestSession = sessions[sessions.length - 1];
     if (!latestSession) return [];
     targetSessionKey = latestSession.session_key;

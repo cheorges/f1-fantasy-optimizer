@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLatestMeeting, getPracticeSessions, OpenF1LiveSessionError } from "@/lib/openf1";
+import { getLatestMeeting, getCompletedPracticeSessions, OpenF1LiveSessionError } from "@/lib/openf1";
 import { MOCK_MEETING, MOCK_SESSIONS } from "@/lib/mock-data";
 import { USE_MOCK_DATA } from "@/lib/config";
 import type { SessionsResponse } from "@/lib/api-types";
@@ -15,7 +15,7 @@ export async function GET(): Promise<NextResponse> {
       return NextResponse.json({ error: "No meeting found" }, { status: 404 });
     }
 
-    const sessions = await getPracticeSessions(meeting.meeting_key);
+    const sessions = await getCompletedPracticeSessions(meeting.meeting_key);
 
     return NextResponse.json<SessionsResponse>({
       meeting,

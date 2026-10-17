@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { findBestLap, findBestSectors, findTopSpeed, getSessionDrivers, getSessionLaps, OpenF1LiveSessionError } from "./openf1";
+import { findBestLap, findBestSectors, findTopSpeed, getCompletedPracticeSessions, getSessionDrivers, getSessionLaps, OpenF1LiveSessionError } from "./openf1";
 import { clearCache } from "./cache";
-import type { Lap } from "./types";
+import type { Lap, Session } from "./types";
 
 function lap(overrides: Partial<Lap>): Lap {
   return {
@@ -160,5 +160,88 @@ describe("live-session back-off", () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
+  });
+});
+
+function session(session_key: number, session_name: string, date_start: string, date_end: string): Session {
+  return {
+    session_key, session_name, date_start, date_end,
+    session_type: "X", meeting_key: 1, year: 2026, country_name: "X", circuit_short_name: "X",
+  };
+}
+
+// Shapes as OpenF1 sends them: the whole weekend is listed in advance, future sessions included.
+const SINGAPORE_SPRINT: Session[] = [
+  session(11378, "Practice 1", "2026-10-09T08:30:00+00:00", "2026-10-09T09:30:00+00:00"),
+  session(11379, "Sprint Qualifying", "2026-10-09T12:30:00+00:00", "2026-10-09T13:14:00+00:00"),
+  session(11383, "Sprint", "2026-10-10T09:00:00+00:00", "2026-10-10T09:30:00+00:00"),
+  session(11384, "Qualifying", "2026-10-10T13:00:00+00:00", "2026-10-10T14:00:00+00:00"),
+  session(11388, "Race", "2026-10-11T12:00:00+00:00", "2026-10-11T14:00:00+00:00"),
+];
+const AUSTIN: Session[] = [
+  session(11389, "Practice 1", "2026-10-23T17:30:00+00:00", "2026-10-23T18:30:00+00:00"),
+  session(11390, "Practice 2", "2026-10-23T21:00:00+00:00", "2026-10-23T22:00:00+00:00"),
+  session(11391, "Practice 3", "2026-10-24T17:30:00+00:00", "2026-10-24T18:30:00+00:00"),
+  session(11392, "Qualifying", "2026-10-24T21:00:00+00:00", "2026-10-24T22:00:00+00:00"),
+  session(11396, "Race", "2026-10-25T20:00:00+00:00", "2026-10-25T22:00:00+00:00"),
+];
+
+describe("getCompletedPracticeSessions", () => {
+  beforeEach(() => {
+    clearCache();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function serve(sessions: Session[]) {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(sessions), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    return fetchSpy;
+  }
+
+  it("returns the single practice of a sprint weekend, even after the sprint has run", async () => {
+    vi.setSystemTime(new Date("2026-10-11T15:00:00Z"));
+    serve(SINGAPORE_SPRINT);
+
+    const sessions = await getCompletedPracticeSessions(1);
+    expect(sessions.map((s) => s.session_name)).toEqual(["Practice 1"]);
+  });
+
+  it("leaves out practices that have not been run yet", async () => {
+    vi.setSystemTime(new Date("2026-10-23T19:00:00Z"));
+    serve(AUSTIN);
+
+    const sessions = await getCompletedPracticeSessions(1);
+    expect(sessions.map((s) => s.session_name)).toEqual(["Practice 1"]);
+  });
+
+  it("leaves out a practice that is still running", async () => {
+    vi.setSystemTime(new Date("2026-10-23T21:30:00Z"));
+    serve(AUSTIN);
+
+    const sessions = await getCompletedPracticeSessions(1);
+    expect(sessions.map((s) => s.session_name)).toEqual(["Practice 1"]);
+  });
+
+  it("orders by start time, so the last entry is the latest practice", async () => {
+    vi.setSystemTime(new Date("2026-10-25T00:00:00Z"));
+    serve([AUSTIN[2]!, AUSTIN[0]!, AUSTIN[1]!]);
+
+    const sessions = await getCompletedPracticeSessions(1);
+    expect(sessions.map((s) => s.session_name)).toEqual(["Practice 1", "Practice 2", "Practice 3"]);
+  });
+
+  it("picks up a practice once it has ended, without waiting for the cache to expire", async () => {
+    vi.setSystemTime(new Date("2026-10-23T19:00:00Z"));
+    const fetchSpy = serve(AUSTIN);
+
+    expect((await getCompletedPracticeSessions(1)).map((s) => s.session_name)).toEqual(["Practice 1"]);
+    vi.setSystemTime(new Date("2026-10-23T22:05:00Z"));
+    expect((await getCompletedPracticeSessions(1)).map((s) => s.session_name)).toEqual(["Practice 1", "Practice 2"]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

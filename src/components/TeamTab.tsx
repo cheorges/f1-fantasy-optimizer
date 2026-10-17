@@ -188,7 +188,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   const remainingBudget = activeTeam.availableBudget;
   const effectiveCost = BUDGET_CAP - remainingBudget;
 
-  // Fetched without a session_key, so the API picks the latest practice session — the same
+  // Fetched without a session_key, so the API picks the latest practice that has run — the same
   // default the home page lands on. Runs once, not on every toggle.
   // Guarded by a ref, not by practiceState: depending on the state this effect sets would
   // re-run it on the first setState, and the cleanup would then cancel the fetch it just
