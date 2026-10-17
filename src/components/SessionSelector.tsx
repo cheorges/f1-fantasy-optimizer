@@ -1,12 +1,17 @@
 "use client";
 
 import type { Session } from "@/lib/types";
+import SegmentedControl from "@/components/SegmentedControl";
 
 interface SessionSelectorProps {
   sessions: Session[];
   selectedKey: number | null;
   onSelect: (sessionKey: number) => void;
   loading: boolean;
+}
+
+function shortName(sessionName: string): string {
+  return sessionName.replace(/^Practice (\d)$/, "FP$1");
 }
 
 export default function SessionSelector({
@@ -24,21 +29,13 @@ export default function SessionSelector({
   }
 
   return (
-    <div className="flex gap-1.5 sm:gap-2 shrink-0">
-      {sessions.map((session) => (
-        <button
-          key={session.session_key}
-          onClick={() => onSelect(session.session_key)}
-          disabled={loading}
-          className={`min-h-[44px] px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-            selectedKey === session.session_key
-              ? "bg-red-600 text-white"
-              : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600"
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          {session.session_name}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      ariaLabel="Practice session"
+      options={sessions.map((s) => ({ value: s.session_key, label: shortName(s.session_name) }))}
+      value={selectedKey}
+      onChange={onSelect}
+      disabled={loading}
+      className="sm:w-96"
+    />
   );
 }

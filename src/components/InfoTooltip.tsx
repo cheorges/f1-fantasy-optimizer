@@ -25,16 +25,13 @@ export default function InfoTooltip({ text }: InfoTooltipProps) {
 
   return (
     <>
-      {/* 44px tap area around a 20px glyph — the circle stays small, the target doesn't. */}
       <button
         onClick={() => setOpen(true)}
-        className="ml-1 w-11 h-11 inline-flex items-center justify-center shrink-0 group"
+        className="tap-target ml-2 w-[18px] h-[18px] shrink-0 rounded-full border border-zinc-600 text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition-colors text-[10px] font-medium leading-none inline-flex items-center justify-center"
         aria-label="Info"
         aria-expanded={open}
       >
-        <span className="w-5 h-5 rounded-full border border-zinc-600 text-zinc-400 group-hover:border-zinc-400 group-hover:text-zinc-200 transition-colors text-xs leading-none inline-flex items-center justify-center">
-          i
-        </span>
+        i
       </button>
       {open && (
         // A tap anywhere closes it, the text included: there is nothing in it to interact with.

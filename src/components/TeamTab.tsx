@@ -15,11 +15,11 @@ import Pagination from "@/components/Pagination";
 import BudgetSlider from "@/components/BudgetSlider";
 import ToggleSwitch from "@/components/ToggleSwitch";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import SegmentedControl from "@/components/SegmentedControl";
 
 interface TeamTabProps {
   drivers: FantasyDriver[];
   constructors: FantasyConstructor[];
-  round: number;
   loading: boolean;
 }
 
@@ -38,12 +38,17 @@ function filled(ids: (number | null)[]): number[] {
   return ids.filter((id): id is number => id !== null);
 }
 
+function isComplete(team: FantasyTeam): boolean {
+  return filled(fitSlots(team.driverIds, DRIVER_SLOTS)).length === DRIVER_SLOTS
+    && filled(fitSlots(team.constructorIds, CONSTRUCTOR_SLOTS)).length === CONSTRUCTOR_SLOTS;
+}
+
 function initialStore(): TeamStore {
   const first = makeTeam(0);
   return { version: 4, teams: [first], activeId: first.id };
 }
 
-export default function TeamTab({ drivers, constructors, round, loading }: TeamTabProps) {
+export default function TeamTab({ drivers, constructors, loading }: TeamTabProps) {
   // Held in a ref so the save effect can recognise it by identity and skip it.
   const initial = useRef<TeamStore>(initialStore());
   const [store, setStore] = useState<TeamStore>(initial.current);
@@ -54,6 +59,9 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   // Deleting a team throws away a line-up the user typed in by hand, and it cannot be
   // undone — so it asks first instead of acting on the tap.
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // A finished line-up is set once and then mostly looked past, so it starts folded away.
+  // Decided when a team is loaded or picked, not on every edit: folding the moment the
+  // seventh pick lands would yank the list away mid-task.
   const [teamCollapsed, setTeamCollapsed] = useState(false);
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
   const [suggestionPage, setSuggestionPage] = useState(0);
@@ -91,6 +99,8 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
     }));
 
     setStore({ ...saved, teams });
+    const active = teams.find((t) => t.id === saved.activeId) ?? teams[0];
+    setTeamCollapsed(active ? isComplete(active) : false);
   }, [drivers, constructors]);
 
   // Save on change, but never the initial empty store — it would overwrite the saved one.
@@ -126,6 +136,16 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
       const team = makeTeam(index);
       return { ...prev, teams: [...prev.teams, team], activeId: team.id };
     });
+    setRenaming(false);
+    setConfirmDelete(false);
+    setTeamCollapsed(false);
+    setSuggestionPage(0);
+  }
+
+  function selectTeam(id: string) {
+    setStore((prev) => ({ ...prev, activeId: id }));
+    const team = store.teams.find((t) => t.id === id);
+    setTeamCollapsed(team ? isComplete(team) : false);
     setRenaming(false);
     setConfirmDelete(false);
     setSuggestionPage(0);
@@ -324,7 +344,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
   const teamComplete = selectedDriverIdSet.size === DRIVER_SLOTS && selectedConstructorIdSet.size === CONSTRUCTOR_SLOTS;
 
   return (
-    <div className="flex flex-col gap-4 sm:gap-6">
+    <div className="flex flex-col gap-5">
       {confirmDelete && (
         <ConfirmDialog
           title="Delete this team?"
@@ -335,99 +355,80 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
         />
       )}
 
-      {/* Team switcher */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-3 sm:px-4 py-3 flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-semibold text-zinc-200">My Teams</span>
-          {round > 0 && (
-            <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">Round {round}</span>
-          )}
-        </div>
-
-        <div className="flex gap-2 flex-wrap">
-          {store.teams.map((team) => (
-            <button
-              key={team.id}
-              onClick={() => {
-                setStore((prev) => ({ ...prev, activeId: team.id }));
-                setRenaming(false);
-                setConfirmDelete(false);
-                setSuggestionPage(0);
+      {/* Team switcher. Renaming swaps the row for an edit field; Delete lives there too,
+          on its own line under the field and behind a confirmation. */}
+      {renaming ? (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveRename();
+                if (e.key === "Escape") setRenaming(false);
               }}
-              className={`min-h-[44px] px-4 rounded-full text-sm font-medium transition-colors ${
-                team.id === store.activeId
-                  ? "bg-red-600 text-white"
-                  : "bg-zinc-800 text-zinc-400 hover:text-zinc-200 active:bg-zinc-700"
-              }`}
-            >
-              {team.name}
-            </button>
-          ))}
-          {store.teams.length < MAX_TEAMS && (
+              maxLength={24}
+              aria-label="Team name"
+              className="flex-1 min-w-0 min-h-[44px] bg-zinc-900 text-zinc-100 text-sm rounded-lg px-3 border border-zinc-800 focus:border-zinc-500 focus:outline-none"
+            />
             <button
-              onClick={handleAddTeam}
-              aria-label="Add team"
-              className="min-h-[44px] w-11 rounded-full text-lg bg-zinc-800 text-zinc-400 hover:text-zinc-200 active:bg-zinc-700 transition-colors"
+              onClick={saveRename}
+              className="tap-target h-9 px-3 rounded-lg text-[13px] font-medium bg-zinc-100 text-zinc-900 hover:bg-white transition-colors"
             >
-              +
+              Save
+            </button>
+            <button
+              onClick={() => setRenaming(false)}
+              className="tap-target h-9 px-3 rounded-lg text-[13px] bg-zinc-900 text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+          {store.teams.length > 1 && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="tap-target self-start mt-1 text-[13px] text-red-400 hover:text-red-300"
+            >
+              Delete team
             </button>
           )}
         </div>
-
-        {/* Renaming replaces both buttons: while an edit is pending there is nothing to
-            delete yet, and a Delete sitting next to a half-typed name is a mis-tap. */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {renaming ? (
-            <>
-              <input
-                autoFocus
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveRename();
-                  if (e.key === "Escape") setRenaming(false);
-                }}
-                maxLength={24}
-                aria-label="Team name"
-                className="min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
-              />
+      ) : (
+        <div className="flex items-center gap-2">
+          <SegmentedControl
+            ariaLabel="Teams"
+            className="flex-1"
+            options={store.teams.map((t) => ({ value: t.id, label: t.name }))}
+            value={store.activeId}
+            onChange={selectTeam}
+          >
+            {store.teams.length < MAX_TEAMS && (
               <button
-                onClick={saveRename}
-                className="min-h-[44px] px-3 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-500 active:bg-red-700 transition-colors"
+                type="button"
+                onClick={handleAddTeam}
+                aria-label="Add team"
+                className="tap-target h-[30px] rounded-[7px] text-base text-zinc-500 hover:text-zinc-200 transition-colors"
               >
-                Save
+                +
               </button>
-              <button
-                onClick={() => setRenaming(false)}
-                className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-700 transition-colors"
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={startRename}
-                className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 transition-colors"
-              >
-                Rename
-              </button>
-              {store.teams.length > 1 && (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-700 transition-colors"
-                >
-                  Delete
-                </button>
-              )}
-            </>
-          )}
+            )}
+          </SegmentedControl>
+          <button
+            onClick={startRename}
+            aria-label="Rename or delete team"
+            className="tap-target w-9 h-9 shrink-0 rounded-lg bg-zinc-900 text-zinc-400 hover:text-zinc-200 inline-flex items-center justify-center transition-colors"
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden>
+              <path d="M10.5 2.5l3 3L6 13H3v-3z" />
+            </svg>
+          </button>
         </div>
-      </div>
+      )}
 
       {/* Team Selection */}
       <CollapsibleSection
-        title="Team Selection"
+        title="Line-up"
         info="Select your 5 drivers and 2 constructors, matching the team you actually field. Your teams are saved automatically."
         collapsed={teamCollapsed}
         onToggle={() => setTeamCollapsed((v) => !v)}
@@ -437,22 +438,34 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
              today's. */
           <span className="flex items-baseline gap-1.5">
             <span className="text-xs text-zinc-500">Market value</span>
-            <span className="text-sm font-mono font-semibold text-zinc-200">{formatPrice(teamCost)}</span>
+            <span className="text-[13px] font-mono text-zinc-200">{formatPrice(teamCost)}</span>
           </span>
         }
+        collapsedContent={
+          <button
+            type="button"
+            onClick={() => setTeamCollapsed(false)}
+            className="w-full min-h-[44px] px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800/80 flex items-center justify-between gap-3 text-left transition-colors"
+          >
+            <span className="text-[13px] text-zinc-300">
+              {selectedDriverIdSet.size} drivers · {selectedConstructorIdSet.size} constructors
+            </span>
+            <span className="text-xs text-zinc-500">Edit</span>
+          </button>
+        }
       >
-          <div className="p-3 sm:p-4">
+          <div>
             {/* Drivers */}
-            <div className="mb-4">
-              <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">Drivers</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <div className="mb-3">
+              <h3 className="text-xs text-zinc-500 mb-1.5">Drivers</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
                 {driverIds.map((selectedId, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="text-zinc-600 text-xs font-mono w-4 shrink-0">{i + 1}</span>
                     <select
                       value={selectedId ?? ""}
                       onChange={(e) => handleDriverChange(i, e.target.value)}
-                      className="flex-1 min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
+                      className="flex-1 min-w-0 min-h-[44px] bg-zinc-900 text-zinc-100 text-sm rounded-lg px-3 border border-zinc-800 focus:border-zinc-500 focus:outline-none"
                     >
                       <option value="">Select driver...</option>
                       {sortedDrivers.map((d) => {
@@ -471,15 +484,15 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
 
             {/* Constructors */}
             <div>
-              <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">Constructors</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <h3 className="text-xs text-zinc-500 mb-1.5">Constructors</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {constructorIds.map((selectedId, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="text-zinc-600 text-xs font-mono w-4 shrink-0">{i + 1}</span>
                     <select
                       value={selectedId ?? ""}
                       onChange={(e) => handleConstructorChange(i, e.target.value)}
-                      className="flex-1 min-h-[44px] bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
+                      className="flex-1 min-w-0 min-h-[44px] bg-zinc-900 text-zinc-100 text-sm rounded-lg px-3 border border-zinc-800 focus:border-zinc-500 focus:outline-none"
                     >
                       <option value="">Select constructor...</option>
                       {sortedConstructors.map((c) => {
@@ -500,41 +513,39 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
 
       {/* Optimization Suggestions */}
       <CollapsibleSection
-        title="Upgrade Suggestions"
-        info="Which available drivers and constructors beat one you hold, within your available budget. By default that means more Fantasy points. Switch on Include FP and anyone who was quicker in the latest practice session joins the same list, marked as such — a driver can be fast this weekend and still be behind on points. Points and lap times are shown separately rather than combined into one score, because there is no honest exchange rate between them."
+        title="Upgrades"
+        info="Which available drivers and constructors beat one you hold, within your available budget. By default that means more Fantasy points. Switch on Include practice pace and anyone who was quicker in the latest practice session joins the same list, marked as such — a driver can be fast this weekend and still be behind on points. Points and lap times are shown separately rather than combined into one score, because there is no honest exchange rate between them."
         collapsed={suggestionsCollapsed}
         onToggle={() => setSuggestionsCollapsed((v) => !v)}
         headerRight={
           mergedSuggestions.length > 0 ? (
-            <span className="text-xs text-zinc-500">{mergedSuggestions.length} upgrades</span>
+            <span className="text-xs text-zinc-500 tabular-nums">{mergedSuggestions.length}</span>
           ) : undefined
         }
       >
-          <div className="p-3 sm:p-4">
+          <div>
             {/* The two controls that shape this list live with it: the budget decides what
                 is affordable, the switch decides what counts as an upgrade. */}
-            <div className="pb-4 mb-4 border-b border-zinc-800 flex flex-col gap-4">
+            <div className="pb-2 border-b border-zinc-800 flex flex-col">
               <ToggleSwitch
                 checked={includePractice}
                 onChange={(v) => { setIncludePractice(v); setSuggestionPage(0); }}
-                label="Include FP"
-                hint="Also list drivers who were quicker in practice, not only higher on points"
+                label="Include practice pace"
               />
 
               <div>
-                <div className="text-sm text-zinc-200 mb-1">Available Budget</div>
                 <BudgetSlider
                   value={activeTeam.availableBudget}
                   onChange={(availableBudget) => { updateActiveTeam({ availableBudget }); setSuggestionPage(0); }}
                   disabled={false}
-                  label="Free budget your Fantasy app shows"
+                  label="Free budget in your Fantasy app"
                   min={AVAILABLE_MIN}
                   max={AVAILABLE_MAX}
                 />
                 {/* Neither "remaining" nor market value here: the first is the slider's
-                    own value shown above in full size, the second sits in the Team
-                    Selection header with the line-up it describes. */}
-                <div className="mt-3 flex items-baseline gap-1.5 text-xs">
+                    own value shown above, the second sits in the Line-up header with the
+                    line-up it describes. */}
+                <div className="flex items-baseline gap-1.5 text-xs">
                   <span className="text-zinc-500">Spent against the cap</span>
                   <span className="text-zinc-300 font-mono">
                     {formatPrice(effectiveCost)} / {formatPrice(BUDGET_CAP)}
@@ -543,14 +554,14 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
               </div>
             </div>
             {includePractice && practiceState !== "ready" && (
-              <div className="mb-3 text-xs text-zinc-500">
+              <div className="mt-2 text-xs text-zinc-500">
                 {practiceState === "loading" && "Loading practice data..."}
                 {practiceState === "blocked" && "A session is running — OpenF1's free tier blocks practice data while it is live, so only points-based upgrades are listed."}
                 {practiceState === "error" && "Practice data could not be loaded; only points-based upgrades are listed."}
               </div>
             )}
             {includePractice && practiceState === "ready" && practiceSessionName && (
-              <div className="mb-3 text-xs text-zinc-500">
+              <div className="mt-2 text-xs text-zinc-500">
                 Practice pace from {practiceSessionName}.
               </div>
             )}
@@ -564,7 +575,7 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
               </div>
             ) : (
               <>
-                <div className="flex flex-col gap-3">
+                <div className="divide-y divide-zinc-800/70">
                   {pagedSuggestions.map((s) => (
                     <SuggestionCard key={`${s.type}-${s.current.id}-${s.upgrade.id}`} suggestion={s} />
                   ))}
@@ -587,62 +598,39 @@ export default function TeamTab({ drivers, constructors, round, loading }: TeamT
 function SuggestionCard({ suggestion }: { suggestion: PointsSwapSuggestion }) {
   const { current, upgrade, pointsDelta, priceDelta, timeDelta, qualifiedBy } = suggestion;
 
-  // For constructors the name and the team are the same string, so the second line would
-  // just repeat the first.
-  const side = (p: typeof current, tone: string, align: string) => (
-    <div className={`min-w-0 ${align}`}>
-      <div className={`font-medium truncate ${tone}`}>
-        <span className="sm:hidden">{p.short}</span>
-        <span className="hidden sm:inline">{p.name}</span>
-      </div>
-      {p.teamName !== p.name && (
-        <div className="text-xs text-zinc-500 truncate">{p.teamName}</div>
-      )}
-      <div className="text-xs text-zinc-400 font-mono mt-1 truncate">
-        {p.overallPoints} pts · {formatPrice(p.price)}
-      </div>
-    </div>
-  );
+  // Points-only is the default and needs no label; the practice cases say why they are here.
+  const reason =
+    qualifiedBy === "pace" ? { label: "faster in practice", className: "text-sky-400" }
+      : qualifiedBy === "both" ? { label: "points + practice", className: "text-emerald-400/80" }
+        : null;
 
-  const badge =
-    qualifiedBy === "pace"
-      ? { label: "Faster in Practice", className: "bg-sky-900/50 text-sky-300" }
-      : qualifiedBy === "both"
-        ? { label: "Points + Practice", className: "bg-emerald-900/50 text-emerald-300" }
-        : { label: "More points", className: "bg-zinc-700/50 text-zinc-400" };
+  // For constructors the name and the team are the same string, so the detail line
+  // carries prices instead.
+  const isConstructor = current.teamName === current.name;
 
   return (
-    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors">
-      {/* Who for whom. The absolute figures sit with the person they describe, so the
-          deltas below are the only place a number is stated twice — as a difference. */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
-        {side(current, "text-red-400", "text-left")}
-        <div className="text-zinc-600 pt-0.5">→</div>
-        {side(upgrade, "text-emerald-400", "text-right")}
+    <div className="py-2.5 flex items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium truncate">
+          <span className="text-red-400"><span className="sm:hidden">{current.short}</span><span className="hidden sm:inline">{current.name}</span></span>
+          <span className="text-zinc-600 mx-1.5">→</span>
+          <span className="text-emerald-400"><span className="sm:hidden">{upgrade.short}</span><span className="hidden sm:inline">{upgrade.name}</span></span>
+        </div>
+        <div className="text-xs text-zinc-500 truncate mt-0.5">
+          {isConstructor
+            ? `${current.overallPoints} → ${upgrade.overallPoints} pts · ${formatPrice(current.price)} → ${formatPrice(upgrade.price)}`
+            : `${current.teamName} → ${upgrade.teamName} · ${current.overallPoints} → ${upgrade.overallPoints} pts`}
+          {reason && <span className={reason.className}> · {reason.label}</span>}
+        </div>
       </div>
-
-      <div className="mt-3 pt-3 border-t border-zinc-700/50 flex items-center gap-4 flex-wrap">
-        <Delta label="Points" value={`${pointsDelta > 0 ? "+" : ""}${pointsDelta}`} unit="pts"
-          tone={pointsDelta > 0 ? "text-emerald-400" : "text-zinc-500"} />
-        {timeDelta !== undefined && (
-          <Delta label="Practice" value={`-${timeDelta.toFixed(3)}`} unit="s" tone="text-emerald-400" />
-        )}
-        <Delta label="Cost" value={`${priceDelta <= 0 ? "" : "+"}${priceDelta.toFixed(1)}`} unit="M"
-          tone={priceDelta <= 0 ? "text-emerald-400" : "text-yellow-400"} />
-        <span className={`ml-auto px-2 py-0.5 rounded text-xs shrink-0 ${badge.className}`}>
-          {badge.label}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function Delta({ label, value, unit, tone }: { label: string; value: string; unit: string; tone: string }) {
-  return (
-    <div className="leading-tight">
-      <div className="text-[10px] uppercase tracking-wide text-zinc-600">{label}</div>
-      <div className={`font-mono text-base ${tone}`}>
-        {value}<span className="text-xs text-zinc-500 ml-0.5">{unit}</span>
+      <div className="shrink-0 text-right font-mono text-[13px] leading-snug tabular-nums">
+        <div className={pointsDelta > 0 ? "text-emerald-400" : "text-zinc-500"}>
+          {pointsDelta > 0 ? "+" : ""}{pointsDelta} pts
+        </div>
+        {timeDelta !== undefined && <div className="text-emerald-400">-{timeDelta.toFixed(3)}s</div>}
+        <div className={priceDelta <= 0 ? "text-emerald-400" : "text-yellow-400"}>
+          {priceDelta <= 0 ? "" : "+"}{priceDelta.toFixed(1)}M
+        </div>
       </div>
     </div>
   );

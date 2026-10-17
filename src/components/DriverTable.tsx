@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { DriverAnalysis } from "@/lib/types";
 import { formatLapTime, formatPrice, formatPriceChange } from "@/lib/format";
+import SortButton from "@/components/SortButton";
 
 type SortField = "bestLapTime" | "price" | "valueScore" | "topSpeed";
 type SortDirection = "asc" | "desc";
@@ -42,13 +43,6 @@ function getValueColor(valueScore: number | null, allScores: (number | null)[]):
   if (normalized >= 0.4) return "text-yellow-400";
   return "text-red-400";
 }
-
-const SORT_OPTIONS: { field: SortField; label: string }[] = [
-  { field: "bestLapTime", label: "Lap Time" },
-  { field: "price", label: "Price" },
-  { field: "valueScore", label: "Value" },
-  { field: "topSpeed", label: "Top Speed" },
-];
 
 export default function DriverTable({ drivers, loading, visibleColumns }: DriverTableProps) {
   const [sortField, setSortField] = useState<SortField>("bestLapTime");
@@ -119,83 +113,73 @@ export default function DriverTable({ drivers, loading, visibleColumns }: Driver
 
   return (
     <>
-      {/* Mobile: Sort pills + Card layout */}
+      {/* Mobile: one row per driver, sorted by tapping a column heading. Heading and rows
+          share the column widths so the figures line up. */}
       <div className="sm:hidden">
-        <div className="px-3 py-2 flex items-center gap-2 border-b border-zinc-800">
-          <div className="flex gap-2 flex-wrap flex-1">
-            {SORT_OPTIONS.map(({ field, label }) => (
-              <button
-                key={field}
-                onClick={() => handleSort(field)}
-                aria-label={`Sort by ${label}`}
-                className={`min-h-[44px] px-3 rounded-full text-xs font-medium transition-colors ${
-                  sortField === field
-                    ? "bg-red-600 text-white"
-                    : "bg-zinc-800 text-zinc-400 active:bg-zinc-700"
-                }`}
-              >
-                {label}{sortIndicator(field)}
-              </button>
-            ))}
-          </div>
-
+        <div className="h-8 flex items-center gap-2 border-b border-zinc-800 text-xs text-zinc-500">
+          <span className="w-5 shrink-0" />
+          <span className="w-[3px] shrink-0" />
+          <span className="flex-1 min-w-0">Driver</span>
+          <SortButton label="Lap" active={sortField === "bestLapTime"} direction={sortDirection}
+            onClick={() => handleSort("bestLapTime")} className="w-[66px] shrink-0 text-right" />
+          {show("price") && (
+            <SortButton label="Price" active={sortField === "price"} direction={sortDirection}
+              onClick={() => handleSort("price")} className="w-[52px] shrink-0 text-right" />
+          )}
+          {show("topSpeed") && (
+            <SortButton label="Speed" active={sortField === "topSpeed"} direction={sortDirection}
+              onClick={() => handleSort("topSpeed")} className="w-10 shrink-0 text-right" />
+          )}
+          <SortButton label="Value" active={sortField === "valueScore"} direction={sortDirection}
+            onClick={() => handleSort("valueScore")} className="w-11 shrink-0 text-right" />
         </div>
-        <div className="divide-y divide-zinc-800/50">
+        <div className="divide-y divide-zinc-800/70">
           {sorted.map((driver, index) => (
-            <div key={driver.driverNumber} className="px-3 py-3">
-              <div className="flex items-center gap-2.5">
-                <span className="text-zinc-500 text-sm font-mono w-5 shrink-0 text-right">
-                  {index + 1}
-                </span>
-                <div
-                  className="w-1 h-8 rounded-full shrink-0"
+            <div key={driver.driverNumber} className="py-1.5">
+              <div className="min-h-9 flex items-center gap-2">
+                <span className="w-5 shrink-0 text-right font-mono text-xs text-zinc-500">{index + 1}</span>
+                <span
+                  className="w-[3px] h-[26px] rounded-full shrink-0"
                   style={{ backgroundColor: `#${driver.teamColour}` }}
                 />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <div className="truncate">
-                      <span className="font-medium">{driver.firstName} </span>
-                      <span className="font-bold">{driver.lastName}</span>
-                    </div>
-                    <span className="text-xs text-zinc-500 shrink-0">{driver.teamName}</span>
+                <div className="flex-1 min-w-0 leading-tight">
+                  <div className="text-sm truncate">
+                    {driver.firstName} <span className="font-semibold">{driver.lastName}</span>
                   </div>
+                  <div className="text-xs text-zinc-500 truncate">{driver.teamName}</div>
                 </div>
-              </div>
-              <div className="mt-1.5 ml-[34px] flex items-center justify-between gap-3 text-sm">
-                <span className="font-mono">{formatLapTime(driver.bestLapTime)}</span>
+                <span className="w-[66px] shrink-0 text-right font-mono text-[13px] tabular-nums">
+                  {formatLapTime(driver.bestLapTime)}
+                </span>
                 {show("price") && (
-                  <span>
-                    <span className="font-mono">{formatPrice(driver.price)}</span>
+                  <span className="w-[52px] shrink-0 text-right font-mono text-[13px] tabular-nums leading-tight">
+                    {formatPrice(driver.price)}
                     {driver.priceChange !== null && driver.priceChange !== 0 && (
-                      <span
-                        className={`ml-1 text-xs ${
-                          driver.priceChange > 0 ? "text-emerald-400" : "text-red-400"
-                        }`}
-                      >
+                      <span className={`block text-[11px] ${driver.priceChange > 0 ? "text-emerald-400" : "text-red-400"}`}>
                         {formatPriceChange(driver.priceChange)}
                       </span>
                     )}
                   </span>
                 )}
+                {show("topSpeed") && (
+                  <span className="w-10 shrink-0 text-right font-mono text-[13px] text-zinc-400 tabular-nums">
+                    {driver.topSpeed ?? "-"}
+                  </span>
+                )}
                 <span
-                  className={`font-mono font-bold ${getValueColor(driver.valueScore, allValueScores)}`}
+                  className={`w-11 shrink-0 text-right font-mono text-[13px] font-semibold tabular-nums ${getValueColor(driver.valueScore, allValueScores)}`}
                 >
                   {driver.valueScore !== null ? driver.valueScore.toFixed(2) : "-"}
                 </span>
               </div>
-              {(show("sectors") || show("topSpeed") || show("laps")) && (
-                <div className="mt-1 ml-[34px] flex gap-3 flex-wrap text-xs text-zinc-500">
+              {(show("sectors") || show("laps")) && (
+                <div className="pl-[39px] mt-0.5 flex gap-3 flex-wrap font-mono text-[11px] text-zinc-500">
                   {show("sectors") && (
-                    <span className="font-mono">
-                      S1: {formatSector(driver.bestSectors.sector1)} / S2: {formatSector(driver.bestSectors.sector2)} / S3: {formatSector(driver.bestSectors.sector3)}
+                    <span>
+                      S1 {formatSector(driver.bestSectors.sector1)} · S2 {formatSector(driver.bestSectors.sector2)} · S3 {formatSector(driver.bestSectors.sector3)}
                     </span>
                   )}
-                  {show("topSpeed") && driver.topSpeed !== null && (
-                    <span className="font-mono">{driver.topSpeed} km/h</span>
-                  )}
-                  {show("laps") && (
-                    <span>{driver.lapCount} laps</span>
-                  )}
+                  {show("laps") && <span>{driver.lapCount} laps</span>}
                 </div>
               )}
             </div>

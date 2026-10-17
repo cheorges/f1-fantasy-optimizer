@@ -22,7 +22,6 @@ export default function TeamsPage() {
       <TeamTab
         drivers={priceDrivers}
         constructors={priceConstructors}
-        round={priceRound}
         loading={loadingPrices}
       />
     </>

@@ -21,7 +21,6 @@ export default function PricesPage() {
       <PriceTable
         drivers={priceDrivers}
         constructors={priceConstructors}
-        round={priceRound}
         loading={loadingPrices}
       />
     </>
