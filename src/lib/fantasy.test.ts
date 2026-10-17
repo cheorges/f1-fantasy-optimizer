@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getFantasyData, getDriverPrices } from "./fantasy";
+import { getFantasyData, getDriverPrices, FantasyRoundNotPublishedError } from "./fantasy";
 import { clearCache } from "./cache";
 
 const ERGAST = {
@@ -102,6 +102,67 @@ describe("getFantasyData", () => {
     const data = await getFantasyData();
     const ids = [...data.drivers, ...data.constructors].map((p) => p.id);
     expect(ids).not.toContain(99);
+  });
+});
+
+// The feed for the next round only appears once the game has rolled over after the race,
+// and the CDN answers for a missing one with 403. Seen on 2026-10-17 for round 19.
+describe("getFantasyData when the calendar round has no feed yet", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function feedFor(round: number, statusByRound: Record<number, number>) {
+    return vi.fn(async (url: string) => {
+      if (url.includes("jolpi.ca")) {
+        return new Response(JSON.stringify({
+          MRData: { RaceTable: { Races: [{ round: String(round), date: "2099-01-01" }] } },
+        }), { status: 200 });
+      }
+      const requested = Number(url.match(/\/(\d+)_en\.json$/)?.[1]);
+      const status = statusByRound[requested] ?? 200;
+      return status === 200
+        ? new Response(JSON.stringify(FANTASY), { status: 200 })
+        : new Response("<Error><Code>AccessDenied</Code></Error>", { status });
+    });
+  }
+
+  beforeEach(() => {
+    clearCache();
+  });
+
+  it("falls back to the previous round's prices", async () => {
+    vi.stubGlobal("fetch", feedFor(19, { 19: 403 }));
+
+    const data = await getFantasyData();
+    expect(data.round).toBe(18);
+    expect(data.drivers[0]!.id).toBe(44);
+  });
+
+  it("takes the new round as soon as its feed exists", async () => {
+    vi.stubGlobal("fetch", feedFor(19, { 19: 403 }));
+    expect((await getFantasyData()).round).toBe(18);
+
+    vi.stubGlobal("fetch", feedFor(19, {}));
+    expect((await getFantasyData()).round).toBe(19);
+  });
+
+  it("does not fall back on a server error", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", feedFor(19, { 19: 500 }));
+
+    const result = getFantasyData().catch((e: unknown) => e);
+    await vi.runAllTimersAsync();
+    const error = await result;
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(FantasyRoundNotPublishedError);
+  });
+
+  it("has nothing to fall back to in round 1", async () => {
+    vi.stubGlobal("fetch", feedFor(1, { 1: 403 }));
+    await expect(getFantasyData()).rejects.toBeInstanceOf(FantasyRoundNotPublishedError);
   });
 });
 
