@@ -18,10 +18,27 @@ body {
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
+}
+
+/* The visible control can be smaller than a finger: this widens the tap area to at least
+   44px around its centre without touching layout. An overflow: hidden on the element or
+   close around it clips the hit area along with the paint. */
+.tap-target {
+  position: relative;
+}
+
+.tap-target::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { Session, Meeting, FantasyDriver, FantasyConstructor } from "@/lib/types";
 import type { SessionsResponse, PricesResponse } from "@/lib/api-types";
-import { isSessionsResponse } from "@/lib/api-types";
+import { isSessionsResponse, isPricesResponse } from "@/lib/api-types";
 import { getLiveSessionMessage, RETRY_INTERVAL_MS, type StaleState } from "@/lib/live-session";
 import { AppDataContext } from "@/components/app-data";
 import { readCache, writeCache } from "@/lib/browser-cache";
@@ -28,6 +28,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // Starts true, like loadingSessions: /prices and /teams are directly addressable, so a
   // cold load must show a spinner rather than the "no data" branch until the fetch settles.
   const [loadingPrices, setLoadingPrices] = useState(true);
+  const [stalePrices, setStalePrices] = useState<StaleState | null>(null);
+  const [pricesRetry, setPricesRetry] = useState(0);
 
   useEffect(() => {
     async function fetchSessions() {
@@ -70,11 +72,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [sessionsBlocked]);
 
-  // Prices come from the Fantasy feed and the race calendar, never from OpenF1, so a live
-  // session cannot block them — no cache fallback needed here.
+  // Prices never come from OpenF1, but the Fantasy feed or the calendar can still fail.
+  // Same fallback as sessions: the last prices this device saw, with a banner. Loading is
+  // only shown once, so a retry doesn't swap the table for a spinner.
   useEffect(() => {
     async function fetchPrices() {
-      setLoadingPrices(true);
       try {
         const res = await fetch("/api/prices");
         if (!res.ok) throw new Error("Failed to load prices");
@@ -82,15 +84,29 @@ export default function AppShell({ children }: { children: ReactNode }) {
         setPriceDrivers(data.drivers);
         setPriceConstructors(data.constructors);
         setPriceRound(data.round);
-        setError(null);
-      } catch (err) {
-        setError(String(err));
+        writeCache("prices", data);
+        setStalePrices(null);
+      } catch {
+        const cached = readCache<PricesResponse>("prices", isPricesResponse);
+        if (cached) {
+          setPriceDrivers(cached.data.drivers);
+          setPriceConstructors(cached.data.constructors);
+          setPriceRound(cached.data.round);
+        }
+        setStalePrices({ savedAt: cached?.savedAt ?? null });
       } finally {
         setLoadingPrices(false);
       }
     }
     fetchPrices();
-  }, []);
+  }, [pricesRetry]);
+
+  const pricesStale = stalePrices !== null;
+  useEffect(() => {
+    if (!pricesStale) return;
+    const id = setInterval(() => setPricesRetry((n) => n + 1), RETRY_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [pricesStale]);
 
   return (
     <AppDataContext.Provider
@@ -106,25 +122,38 @@ export default function AppShell({ children }: { children: ReactNode }) {
         staleSessions,
         staleDrivers,
         setStaleDrivers,
+        stalePrices,
       }}
     >
       <div className="min-h-screen">
-        <header className="border-b border-zinc-800 bg-zinc-950/80 sticky top-0 z-10 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+        {/* The race weekend and the Fantasy round live here, once, instead of in a card on
+            every page. */}
+        <header className="border-b border-zinc-800 bg-zinc-950/90 sticky top-0 z-10 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-3 sm:px-4 h-[52px] flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-base sm:text-xl font-bold truncate">
-                <span className="text-red-500">F1</span> Fantasy Optimizer
+              <h1 className="text-[15px] font-semibold leading-tight truncate">
+                <span className="text-red-500 font-bold">F1</span> Fantasy Optimizer
               </h1>
               {meeting && (
-                <p className="text-xs sm:text-sm text-zinc-400 mt-0.5 truncate">
-                  {meeting.meeting_name} - {meeting.country_name}
+                <p className="text-xs text-zinc-400 truncate">
+                  {meeting.meeting_name.replace(/ Grand Prix$/, " GP")} · {meeting.circuit_short_name}
                 </p>
               )}
             </div>
+            {priceRound > 0 && (
+              <span
+                title={`Fantasy round ${priceRound}`}
+                className="shrink-0 font-mono text-xs text-zinc-400 border border-zinc-800 rounded-md px-1.5 py-0.5"
+              >
+                R{priceRound}
+              </span>
+            )}
           </div>
         </header>
 
-        <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] flex flex-col gap-4 sm:gap-6">
+        {/* overflow-x-clip: a tap area at the screen edge reaches past it and would otherwise
+            make the page scroll sideways by a pixel. */}
+        <main className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-5 pb-[calc(5rem+env(safe-area-inset-bottom))] flex flex-col gap-5 overflow-x-clip">
           {error && (
             <div className="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300">
               <p>{error}</p>
@@ -132,9 +161,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          {/* The banner is rendered by the home page, not here: only practice data is ever
-              blocked, and the page knows which of the two cache entries is actually on
-              screen, so it can name the right timestamp. */}
+          {/* Banners are rendered by the pages, not here: each page knows which cached data
+              is actually on screen, so it can name the right timestamp. */}
           {children}
 
           <p className="text-center text-xs text-zinc-600">

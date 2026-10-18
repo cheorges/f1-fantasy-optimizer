@@ -21,8 +21,7 @@ import Pagination from "@/components/Pagination";
 const PAGE_SIZE = 10;
 
 export default function Home() {
-  const { sessions, loadingSessions, meeting, priceRound, setError, staleSessions, staleDrivers, setStaleDrivers } =
-    useAppData();
+  const { sessions, loadingSessions, setError, staleSessions, staleDrivers, setStaleDrivers } = useAppData();
 
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
   const [drivers, setDrivers] = useState<DriverAnalysis[]>([]);
@@ -128,15 +127,13 @@ export default function Home() {
   // Only entries that actually have a faster, affordable replacement are offered — an
   // option that leads to an empty list is a dead end.
   const swapOptions = useMemo(() => {
-    const driverAcronyms = [...new Set(recommendations.map((r) => r.driverOut.nameAcronym))].sort();
+    const outs = new Map(recommendations.map((r) => [r.driverOut.nameAcronym, r.driverOut]));
+    const driverChoices = [...outs.values()]
+      .sort((a, b) => a.lastName.localeCompare(b.lastName))
+      .map((d) => ({ acronym: d.nameAcronym, name: `${d.firstName} ${d.lastName}` }));
     const constructorNames = [...new Set(constructorRecs.map((r) => r.constructorOut.name))].sort();
-    return { driverAcronyms, constructorNames };
+    return { driverChoices, constructorNames };
   }, [recommendations, constructorRecs]);
-
-  const selectedSessionName = useMemo(
-    () => sessions.find((s) => s.session_key === selectedSession)?.session_name ?? null,
-    [sessions, selectedSession],
-  );
 
   const totalPages = Math.max(1, Math.ceil((selectedDriverRecs.length + selectedConstructorRecs.length) / PAGE_SIZE));
   const pagedDriverRecs = selectedDriverRecs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -188,9 +185,16 @@ export default function Home() {
     <div className="relative">
       <button
         onClick={() => setShowColumnPicker((v) => !v)}
-        className="min-h-[44px] px-3 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 transition-colors"
+        aria-label="Columns"
+        aria-expanded={showColumnPicker}
+        className="tap-target w-8 h-8 rounded-lg bg-zinc-900 text-zinc-400 hover:text-zinc-200 inline-flex items-center justify-center transition-colors"
       >
-        Columns
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+          <path d="M2 4h12M2 8h12M2 12h12" />
+          <circle cx="5" cy="4" r="1.6" className="fill-zinc-900" />
+          <circle cx="11" cy="8" r="1.6" className="fill-zinc-900" />
+          <circle cx="7" cy="12" r="1.6" className="fill-zinc-900" />
+        </svg>
       </button>
       {showColumnPicker && (
         <>
@@ -203,9 +207,9 @@ export default function Home() {
                 className="w-full min-h-[44px] px-3 text-left text-xs flex items-center gap-2 hover:bg-zinc-700 transition-colors"
               >
                 <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                  visibleColumns.has(key) ? "bg-red-600 border-red-600" : "border-zinc-600"
+                  visibleColumns.has(key) ? "bg-zinc-100 border-zinc-100" : "border-zinc-600"
                 }`}>
-                  {visibleColumns.has(key) && <span className="text-white text-[10px]">&#10003;</span>}
+                  {visibleColumns.has(key) && <span className="text-zinc-900 text-[10px]">&#10003;</span>}
                 </span>
                 <span className="text-zinc-200">{label}</span>
               </button>
@@ -221,13 +225,13 @@ export default function Home() {
       value={selection}
       onChange={(e) => { setSelection(e.target.value); setPage(0); }}
       aria-label="Pick a driver or constructor"
-      className="min-h-[44px] w-full sm:w-56 bg-zinc-800 text-zinc-200 text-sm rounded-lg px-3 border border-zinc-700 focus:border-red-500 focus:outline-none"
+      className="min-h-[44px] min-w-0 flex-1 sm:flex-none sm:w-64 bg-zinc-900 text-zinc-100 text-sm rounded-lg px-3 border border-zinc-800 focus:border-zinc-500 focus:outline-none"
     >
       <option value="">Pick one...</option>
-      {swapOptions.driverAcronyms.length > 0 && (
+      {swapOptions.driverChoices.length > 0 && (
         <optgroup label="Drivers">
-          {swapOptions.driverAcronyms.map((acronym) => (
-            <option key={acronym} value={`driver:${acronym}`}>{acronym}</option>
+          {swapOptions.driverChoices.map(({ acronym, name }) => (
+            <option key={acronym} value={`driver:${acronym}`}>{name}</option>
           ))}
         </optgroup>
       )}
@@ -250,35 +254,16 @@ export default function Home() {
         <StaleDataBanner savedAt={staleDrivers?.savedAt ?? staleSessions?.savedAt ?? null} />
       )}
 
-      {/* Which practice data the ranking is based on, and from where */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 px-3 sm:px-4 py-3 flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-zinc-200">Training Performance</span>
-              {priceRound > 0 && (
-                <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">Round {priceRound}</span>
-              )}
-            </div>
-            <p className="text-xs text-zinc-400 mt-1">
-              {meeting
-                ? `${meeting.meeting_name} · ${meeting.circuit_short_name}, ${meeting.country_name}`
-                : "No race weekend loaded"}
-              {selectedSessionName && ` — ${selectedSessionName}`}
-            </p>
-          </div>
-        </div>
-        <SessionSelector
-          sessions={sessions}
-          selectedKey={selectedSession}
-          onSelect={handleSessionSelect}
-          loading={loadingDrivers}
-        />
-      </div>
+      {/* Race weekend and round are in the header; this only picks the session. */}
+      <SessionSelector
+        sessions={sessions}
+        selectedKey={selectedSession}
+        onSelect={handleSessionSelect}
+        loading={loadingDrivers}
+      />
 
-      {/* Driver Table */}
       <CollapsibleSection
-        title="Driver Performance & Value"
+        title="Pace & value"
         info="Lap times and sector data come from the OpenF1 API, based on the selected practice session (FP1/FP2/FP3). Prices and value scores come from the official F1 Fantasy game. The value score combines pace and price — higher means more performance per dollar."
         collapsed={driversCollapsed}
         onToggle={() => toggleSection("drivers")}
@@ -294,19 +279,17 @@ export default function Home() {
       {/* One table, one question: what can replace this pick. Showing every pairing in
           the field was noise — nobody swaps a driver they don't hold. */}
       <CollapsibleSection
-        title="Swap Recommendations"
+        title="Swap recommendations"
         info="Pick a driver or constructor and see who could replace them: quicker in the selected practice session and within your available budget, sorted by biggest lap time gain. The one on the left (red) is the one you'd drop, the one on the right (green) is the replacement. Only entries that have at least one affordable, quicker replacement appear in the list."
         collapsed={collapsedSections.has("swaps")}
         onToggle={() => toggleSection("swaps")}
       >
-        <div className="p-3 sm:p-4">
-          {/* In the body, not the header: at 390px the title wrapped to two lines to make
-              room for it. */}
+        <div>
           {/* Both controls that shape the list live with it: who to replace, and what
               can be spent doing it. */}
-          <div className="pb-4 mb-4 border-b border-zinc-800 flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <span className="text-sm text-zinc-400 sm:shrink-0 sm:w-20">Replace</span>
+          <div className="pb-1 border-b border-zinc-800 flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <span className="text-[13px] text-zinc-400 shrink-0">Replace</span>
               {swapSelect}
             </div>
             <BudgetSlider value={budget} onChange={handleBudgetChange} disabled={loadingDrivers} />
@@ -320,7 +303,7 @@ export default function Home() {
             <div className="text-center py-8 text-zinc-500 text-sm">
               Select a practice session to see recommendations
             </div>
-          ) : swapOptions.driverAcronyms.length === 0 && swapOptions.constructorNames.length === 0 ? (
+          ) : swapOptions.driverChoices.length === 0 && swapOptions.constructorNames.length === 0 ? (
             <div className="text-center py-8 text-zinc-500 text-sm">
               No swaps available for this budget. Try increasing it.
             </div>
@@ -336,19 +319,17 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <div className="flex flex-col gap-3">
-                {pagedDriverRecs.map((rec, i) => (
+              <div className="divide-y divide-zinc-800/70">
+                {pagedDriverRecs.map((rec) => (
                   <RecommendationCard
                     key={`${rec.driverOut.driverNumber}-${rec.driverIn.driverNumber}`}
                     recommendation={rec}
-                    index={page * PAGE_SIZE + i}
                   />
                 ))}
-                {pagedConstructorRecs.map((rec, i) => (
+                {pagedConstructorRecs.map((rec) => (
                   <ConstructorRecommendationCard
                     key={`${rec.constructorOut.name}-${rec.constructorIn.name}`}
                     recommendation={rec}
-                    index={page * PAGE_SIZE + i}
                   />
                 ))}
               </div>

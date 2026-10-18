@@ -6,8 +6,9 @@ which swaps actually buy you pace, and where prices are heading. Built for the p
 ## What it does
 
 **Home** — every driver ranked by practice pace, with sector times, top speed, price and a
-value score. The heading names the session and the circuit the ranking is based on, so it is
-never ambiguous which data you are looking at. Below it you pick one driver or constructor
+value score. The header names the race weekend and the circuit, the session picker below it
+which practice the ranking is based on. Only practices that have run are offered, so on a
+sprint weekend that is FP1 alone. Below the ranking you pick one driver or constructor
 and a budget (0-25M), and get the entries that would replace them within it, sorted by
 biggest lap-time gain. Only entries with at least one affordable quicker replacement are
 offered. Nothing is refetched while you drag — the swaps are computed in the browser.
@@ -15,11 +16,13 @@ offered. Nothing is refetched while you drag — the swaps are computed in the b
 **Teams** — enter up to three fantasy teams (5 drivers + 2 constructors each), name them,
 and give each its own available budget (see [Available budget](#available-budget)). Each
 team gets its own upgrade suggestions, ranked by season points gained, and a switch that
-folds practice pace into the same list. Teams are saved in the browser and survive a reload.
+folds pace from the latest practice that has run into the same list. Teams are saved in the
+browser and survive a reload.
 
 **Prices** — current prices for all drivers and constructors, with the change since the last
 round, ownership, points, and a trend indicator. See [Price trend](#price-trend) for what
-that indicator can and cannot tell you.
+that indicator can and cannot tell you. If prices cannot be loaded, Prices and Teams show the
+last ones this device saw, with a banner saying when they are from.
 
 **Live** — the official F1 leaderboard while a session is running: position, best lap, gap to
 the front, laps and who is in the pits, above a session clock and the flag status. The tab
@@ -100,10 +103,15 @@ rather than once per navigation.
 | F1 live timing feed | The live leaderboard, while a session runs |
 
 All four are free. Requests get up to three attempts, retrying 5xx and network
-failures with exponential backoff and bounding each attempt at 10s, and responses are held
+failures with exponential backoff, and 429s after the delay the server asks for (OpenF1's
+free tier allows three requests per second). Each attempt is bounded at 10s, and responses are held
 in an in-memory cache (8 hours; past Fantasy
 rounds for 30 days, since the feed freezes them; 100 entries max). The cache is per process
 and does not survive a restart — that is deliberate, the data is cheap to refetch.
+
+The current Fantasy round comes from the race calendar, which moves on to the next round at
+midnight UTC on race day. That round's feed only appears once the game rolls over after the
+race, so until then the previous round's prices are used.
 
 Feeds are validated with zod and fail loudly on a shape change rather than silently
 producing `NaN`. One consequence worth knowing: OpenF1 returns HTTP 401 while a session is

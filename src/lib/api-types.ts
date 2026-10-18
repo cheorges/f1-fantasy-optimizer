@@ -32,6 +32,12 @@ export function isSessionsResponse(value: unknown): value is SessionsResponse {
   return typeof v.meeting === "object" && v.meeting !== null && Array.isArray(v.sessions);
 }
 
+export function isPricesResponse(value: unknown): value is PricesResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return Array.isArray(v.drivers) && Array.isArray(v.constructors) && typeof v.round === "number";
+}
+
 export function isDriversResponse(value: unknown): value is DriversResponse {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;

@@ -30,9 +30,6 @@ export default function ConfirmDialog({ title, body, confirmLabel, onConfirm, on
     return () => document.removeEventListener("keydown", handleKey);
   }, [onCancel]);
 
-  // Deliberately not using animate-fade-in: those keyframes hard-code translateX(-50%)
-  // for the horizontally centred toast they were written for, which would shove a
-  // full-screen overlay half a viewport to the left until the animation ends.
   return (
     <div
       role="dialog"

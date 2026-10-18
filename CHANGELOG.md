@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.1] - 2026-10-17
+
+### Fixed
+
+- **Prices on race day.** From 00:00 UTC on race day the app asked for the next round's Fantasy feed, which only appears once the game rolls over after the race. Prices, Teams and the home page failed for the whole of Sunday. A round whose feed is not published yet now falls back to the previous one
+- **Practice sessions that had not run yet.** OpenF1 lists the whole weekend in advance, and the app took the last practice on the list. On a regular weekend the home page opened on FP3 from the end of FP1 onwards and showed an error, and "Include practice pace" on Teams failed the same way. Only practices that have run are offered now, and Teams always uses the latest of them. Sprint weekends, with their single FP1, were not affected
+- The first page load after a restart or an expired cache could fail with "429 Too Many Requests" from OpenF1, whose free tier allows three requests per second. Rate-limited requests are now retried after the delay the server asks for
+- Info popovers open centred on the screen instead of below the button, where they ran off the bottom or behind the navigation
+- The "A session is running" banner no longer slides in from half a screen to the left
+
+### Added
+
+- When prices cannot be loaded, Prices and Teams show the last prices this device saw, with a banner saying when they are from, and retry every 5 minutes
+
+### Changed
+
+- **Compact phone layout.** Sections are flat lists instead of cards inside cards, rows are 48px, and swap and upgrade suggestions are two-line rows. With mock data the home page shows 12 drivers on the first screen instead of 5, Teams 7 upgrade suggestions instead of 2
+- The header carries the race weekend and the Fantasy round; the separate Training Performance and Fantasy Prices cards are gone
+- Practice session, team and price list are picked with a segmented control, and lists sort by tapping a column heading instead of a row of chips
+- Prices shows drivers and constructors behind a switch instead of one long page
+- Teams: switching and renaming share one row, Delete sits in the rename field behind its confirmation, and a complete line-up starts folded
+- Red is kept for the brand, the active tab and the budget slider. Controls look smaller, the touch area stays at 44px
+
 ## [1.3.0] - 2026-09-08
 
 ### Added

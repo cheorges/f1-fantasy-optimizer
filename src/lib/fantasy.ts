@@ -125,6 +125,16 @@ function parseConstructor(raw: RawFantasyPlayer): FantasyConstructor {
   };
 }
 
+// The next round's feed only appears once the game rolls over after the race, and the CDN
+// answers for a missing one with 403. The calendar flips to that round at 00:00 UTC on race
+// day, so without a fallback the whole of race day had no prices.
+export class FantasyRoundNotPublishedError extends Error {
+  constructor(round: number) {
+    super(`Fantasy feed for round ${round} is not published yet`);
+    this.name = "FantasyRoundNotPublishedError";
+  }
+}
+
 // Past rounds are frozen snapshots — the feed never rewrites them, so they can be held
 // far longer than the live round.
 export const PAST_ROUND_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -134,6 +144,9 @@ export async function fetchRound(round: number, ttlMs: number = CACHE_TTL_MS): P
     `fantasy:data:${round}`,
     async () => {
       const response = await fetchWithRetry(`${FANTASY_FEED_URL}/${round}_en.json`);
+      if (response.status === 403 || response.status === 404) {
+        throw new FantasyRoundNotPublishedError(round);
+      }
       if (!response.ok) {
         throw new Error(`Fantasy API error: ${response.status} ${response.statusText}`);
       }
@@ -154,7 +167,13 @@ export async function fetchRound(round: number, ttlMs: number = CACHE_TTL_MS): P
 }
 
 export async function getFantasyData(): Promise<FantasyData> {
-  return fetchRound(await getCurrentRound());
+  const round = await getCurrentRound();
+  try {
+    return await fetchRound(round);
+  } catch (error) {
+    if (!(error instanceof FantasyRoundNotPublishedError) || round <= 1) throw error;
+    return fetchRound(round - 1);
+  }
 }
 
 export async function getDriverPrices(): Promise<Map<string, FantasyDriver>> {

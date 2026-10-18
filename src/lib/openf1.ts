@@ -131,8 +131,11 @@ export async function getLatestMeeting(): Promise<Meeting | null> {
   return pastOrCurrent.length > 0 ? pastOrCurrent[pastOrCurrent.length - 1]! : null;
 }
 
-export async function getPracticeSessions(meetingKey: number): Promise<Session[]> {
-  return getOrFetch(
+// OpenF1 lists the whole weekend in advance, so FP2 and FP3 are there on Friday morning
+// and have no laps until they run. Filtered after the cache, like getLatestMeeting, so a
+// practice shows up the moment it ends rather than when the 8h entry expires.
+export async function getCompletedPracticeSessions(meetingKey: number): Promise<Session[]> {
+  const sessions = await getOrFetch(
     `sessions:${meetingKey}`,
     async () => {
       const sessions = await fetchJson(
@@ -140,12 +143,15 @@ export async function getPracticeSessions(meetingKey: number): Promise<Session[]
         { meeting_key: String(meetingKey) },
         z.array(SessionSchema),
       );
-      return sessions.filter((s) =>
-        ["Practice 1", "Practice 2", "Practice 3"].includes(s.session_name),
-      );
+      return sessions
+        .filter((s) => ["Practice 1", "Practice 2", "Practice 3"].includes(s.session_name))
+        .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime());
     },
     CACHE_TTL_MS,
   );
+
+  const now = new Date();
+  return sessions.filter((s) => new Date(s.date_end) <= now);
 }
 
 export async function getSessionLaps(sessionKey: number): Promise<Lap[]> {

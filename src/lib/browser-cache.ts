@@ -1,6 +1,6 @@
-// Last-known-good responses kept in the browser, so a blocked upstream shows stale data
-// instead of an empty page. Only used for the OpenF1-backed endpoints — see price-trend.ts
-// and fantasy.ts for the server-side cache, which is a different thing entirely.
+// Last-known-good responses kept in the browser, so a blocked or failing upstream shows
+// stale data instead of an empty page. Used for sessions, practice data and prices. The
+// server-side cache in cache.ts is a different thing: per instance, gone on restart.
 
 const PREFIX = "f1-cache";
 

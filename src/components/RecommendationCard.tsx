@@ -2,82 +2,31 @@
 
 import { memo } from "react";
 import type { SwapRecommendation } from "@/lib/types";
-import { formatLapTime, formatPrice } from "@/lib/format";
+import { formatLapTime } from "@/lib/format";
+import { SwapDeltas } from "@/components/ConstructorRecommendationCard";
 
 interface RecommendationCardProps {
   recommendation: SwapRecommendation;
-  index: number;
 }
 
-function RecommendationCard({ recommendation, index }: RecommendationCardProps) {
+// One list row: who for whom on top, where the gain comes from below, the two deltas on
+// the right.
+function RecommendationCard({ recommendation }: RecommendationCardProps) {
   const { driverOut, driverIn, timeDelta, priceDelta } = recommendation;
 
   return (
-    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 hover:border-zinc-600 transition-colors">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <span className="text-zinc-600 text-sm font-mono w-6 shrink-0">
-            #{index + 1}
-          </span>
-
-          {/* Driver Out */}
-          <div className="flex items-center gap-2 min-w-0">
-            <div
-              className="w-1 h-8 rounded-full shrink-0"
-              style={{ backgroundColor: `#${driverOut.teamColour}` }}
-            />
-            <div className="min-w-0">
-              <div className="font-medium text-red-400 truncate">
-                {driverOut.nameAcronym}
-              </div>
-              <div className="text-xs text-zinc-500 truncate">{driverOut.teamName}</div>
-            </div>
-          </div>
-
-          {/* Arrow */}
-          <div className="text-zinc-500 shrink-0 px-1">→</div>
-
-          {/* Driver In */}
-          <div className="flex items-center gap-2 min-w-0">
-            <div
-              className="w-1 h-8 rounded-full shrink-0"
-              style={{ backgroundColor: `#${driverIn.teamColour}` }}
-            />
-            <div className="min-w-0">
-              <div className="font-medium text-emerald-400 truncate">
-                {driverIn.nameAcronym}
-              </div>
-              <div className="text-xs text-zinc-500 truncate">{driverIn.teamName}</div>
-            </div>
-          </div>
+    <div className="py-2.5 flex items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium truncate">
+          <span className="text-red-400">{driverOut.nameAcronym}</span>
+          <span className="text-zinc-600 mx-1.5">→</span>
+          <span className="text-emerald-400">{driverIn.nameAcronym}</span>
         </div>
-
-        {/* Stats */}
-        <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 shrink-0 text-right">
-          <div>
-            <div className="text-xs text-zinc-500">Time</div>
-            <div className="text-sm font-mono text-emerald-400">
-              -{timeDelta.toFixed(3)}s
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-zinc-500">Cost</div>
-            <div className={`text-sm font-mono ${priceDelta <= 0 ? "text-emerald-400" : "text-yellow-400"}`}>
-              {priceDelta <= 0 ? "" : "+"}{priceDelta.toFixed(1)}M
-            </div>
-          </div>
+        <div className="text-xs text-zinc-500 truncate mt-0.5">
+          {driverOut.teamName} → {driverIn.teamName} · {formatLapTime(driverOut.bestLapTime)} → {formatLapTime(driverIn.bestLapTime)}
         </div>
       </div>
-
-      {/* Lap comparison */}
-      <div className="mt-3 flex gap-3 sm:gap-6 flex-wrap text-xs text-zinc-500">
-        <span>
-          {driverOut.nameAcronym}: {formatLapTime(driverOut.bestLapTime)} / {formatPrice(driverOut.price)}
-        </span>
-        <span>
-          {driverIn.nameAcronym}: {formatLapTime(driverIn.bestLapTime)} / {formatPrice(driverIn.price)}
-        </span>
-      </div>
+      <SwapDeltas timeDelta={timeDelta} priceDelta={priceDelta} />
     </div>
   );
 }

@@ -1,17 +1,28 @@
 "use client";
 
-import { useAppData } from "@/components/app-data";
+import { useAppData, isSessionRunning } from "@/components/app-data";
 import PriceTable from "@/components/PriceTable";
+import StaleDataBanner from "@/components/StaleDataBanner";
 
 export default function PricesPage() {
-  const { priceDrivers, priceConstructors, priceRound, loadingPrices } = useAppData();
+  const appData = useAppData();
+  const { priceDrivers, priceConstructors, priceRound, loadingPrices, stalePrices } = appData;
 
   return (
-    <PriceTable
-      drivers={priceDrivers}
-      constructors={priceConstructors}
-      round={priceRound}
-      loading={loadingPrices}
-    />
+    <>
+      {stalePrices && (
+        <StaleDataBanner
+          subject="prices"
+          savedAt={stalePrices.savedAt}
+          sessionRunning={isSessionRunning(appData)}
+          round={priceRound}
+        />
+      )}
+      <PriceTable
+        drivers={priceDrivers}
+        constructors={priceConstructors}
+        loading={loadingPrices}
+      />
+    </>
   );
 }
