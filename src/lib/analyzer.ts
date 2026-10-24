@@ -28,7 +28,7 @@ function buildDriverAnalysis(
   performance: DriverPerformance,
   fantasy: FantasyDriver | null,
 ): DriverAnalysis {
-  const bestLapTime = performance.bestLap?.lap_duration ?? null;
+  const bestLapTime = performance.bestLapTime;
 
   return {
     driverNumber: performance.driver.driver_number,
@@ -70,9 +70,14 @@ export async function analyzeDrivers(sessionKey?: number): Promise<DriverAnalysi
     getDriverPrices(),
   ]);
 
+  const positions = new Map(performances.map((p) => [p.driver.driver_number, p.position]));
+
   return performances
     .map((p) => buildDriverAnalysis(p, matchFantasyDriver(p, priceMap)))
     .sort((a, b) => {
+      const posA = positions.get(a.driverNumber) ?? null;
+      const posB = positions.get(b.driverNumber) ?? null;
+      if (posA !== null && posB !== null) return posA - posB;
       if (a.bestLapTime === null) return 1;
       if (b.bestLapTime === null) return -1;
       return a.bestLapTime - b.bestLapTime;

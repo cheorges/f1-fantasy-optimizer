@@ -38,9 +38,17 @@ export interface Driver {
   session_key: number;
 }
 
+export interface SessionResult {
+  driver_number: number;
+  position: number | null;
+  duration: number | null;
+}
+
 export interface DriverPerformance {
   driver: Driver;
-  bestLap: Lap | null;
+  bestLapTime: number | null;
+  // Official classification position; null while OpenF1 has not published the result.
+  position: number | null;
   bestSectors: {
     sector1: number | null;
     sector2: number | null;

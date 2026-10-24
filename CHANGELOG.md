@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.2] - 2026-10-24
+
+### Fixed
+
+- **Practice times match the official classification.** Laps deleted for track limits counted as a driver's best lap, because OpenF1 lists them with their time and no mark. In Austin FP1 Verstappen showed as fastest with a deleted 1:35.860 instead of second with 1:36.136, and Hadjar as fifth instead of fourteenth; 8 of 22 drivers were off in both FP1 and FP2. Best lap and order now come from the official classification, and constructor averages with them. Until OpenF1 publishes it shortly after a session, the app falls back to the fastest lap as before
+
 ## [1.3.1] - 2026-10-17
 
 ### Fixed
