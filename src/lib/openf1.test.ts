@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { findBestLap, findBestSectors, findTopSpeed, getCompletedPracticeSessions, getSessionDrivers, getSessionLaps, OpenF1LiveSessionError } from "./openf1";
+import { findBestLap, findBestSectors, findTopSpeed, getCompletedPracticeSessions, getDriverPerformances, getSessionDrivers, getSessionLaps, OpenF1LiveSessionError } from "./openf1";
 import { clearCache } from "./cache";
 import type { Lap, Session } from "./types";
 
@@ -243,5 +243,71 @@ describe("getCompletedPracticeSessions", () => {
     vi.setSystemTime(new Date("2026-10-23T22:05:00Z"));
     expect((await getCompletedPracticeSessions(1)).map((s) => s.session_name)).toEqual(["Practice 1", "Practice 2"]);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// OpenF1 lists laps deleted for track limits with their time and no flag. The official
+// classification leaves them out, and only /session_result carries it.
+describe("getDriverPerformances", () => {
+  const VER = {
+    driver_number: 3, first_name: "Max", last_name: "Verstappen", full_name: "Max VERSTAPPEN",
+    name_acronym: "VER", team_name: "Red Bull Racing", team_colour: "4781D7",
+    country_code: "NED", headshot_url: null, session_key: 11389,
+  };
+  // Austin FP1: 1:35.860 was deleted at turn 19, 1:36.136 is the classified time (P2).
+  const LAPS = [
+    lap({ session_key: 11389, driver_number: 3, lap_number: 9, lap_duration: 96.136 }),
+    lap({ session_key: 11389, driver_number: 3, lap_number: 15, lap_duration: 95.86 }),
+  ];
+  const RESULT = [{
+    position: 2, driver_number: 3, number_of_laps: 25, dnf: false, dns: false, dsq: false,
+    duration: 96.136, gap_to_leader: 0.084, meeting_key: 1297, session_key: 11389,
+  }];
+
+  beforeEach(() => {
+    clearCache();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function serve(result: unknown[]) {
+    const fetchSpy = vi.fn(async (input: string | URL | Request) => {
+      const path = new URL(String(input)).pathname;
+      const body =
+        path.endsWith("/laps") ? LAPS
+        : path.endsWith("/drivers") ? [VER]
+        : path.endsWith("/session_result") ? result
+        : [session(11389, "Practice 1", "2026-10-23T17:30:00+00:00", "2026-10-23T18:30:00+00:00")];
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    return fetchSpy;
+  }
+
+  it("takes the best lap and position from the official classification", async () => {
+    serve(RESULT);
+
+    const [ver] = await getDriverPerformances(11389);
+    expect(ver!.bestLapTime).toBe(96.136);
+    expect(ver!.position).toBe(2);
+  });
+
+  it("falls back to the laps while the classification is not out yet", async () => {
+    serve([]);
+
+    const [ver] = await getDriverPerformances(11389);
+    expect(ver!.bestLapTime).toBe(95.86);
+    expect(ver!.position).toBeNull();
+  });
+
+  it("asks again for a classification that was still empty", async () => {
+    const fetchSpy = serve([]);
+
+    await getDriverPerformances(11389);
+    await getDriverPerformances(11389);
+    const resultCalls = fetchSpy.mock.calls.filter(([input]) => String(input).includes("/session_result"));
+    expect(resultCalls).toHaveLength(2);
   });
 });

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getCached, getOrFetch, setCache } from "./cache";
 import { fetchWithRetry } from "./http";
-import type { Session, Lap, Driver, DriverPerformance, Meeting } from "./types";
+import type { Session, Lap, Driver, DriverPerformance, Meeting, SessionResult } from "./types";
 
 const BASE_URL = "https://api.openf1.org/v1";
 const CACHE_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -78,6 +78,14 @@ const DriverSchema = z
     country_code: z.string().nullable(),
     headshot_url: z.string().nullable(),
     session_key: z.number(),
+  })
+  .passthrough();
+
+const SessionResultSchema = z
+  .object({
+    driver_number: z.number(),
+    position: z.number().nullable(),
+    duration: z.number().nullable(),
   })
   .passthrough();
 
@@ -170,6 +178,23 @@ export async function getSessionDrivers(sessionKey: number): Promise<Driver[]> {
   );
 }
 
+// The official classification, which leaves out laps deleted for track limits. /laps
+// still carries those with their time and no flag. An empty result means OpenF1 has
+// not published it yet, so it is not cached.
+export async function getSessionResult(sessionKey: number): Promise<SessionResult[]> {
+  const key = `session-result:${sessionKey}`;
+  const cached = getCached<SessionResult[]>(key);
+  if (cached) return cached;
+
+  const result = await fetchJson(
+    "/session_result",
+    { session_key: String(sessionKey) },
+    z.array(SessionResultSchema),
+  );
+  if (result.length > 0) setCache(key, result, CACHE_TTL_MS);
+  return result;
+}
+
 export function findBestLap(laps: Lap[]): Lap | null {
   const validLaps = laps.filter(
     (l): l is Lap & { lap_duration: number } => l.lap_duration !== null && !l.is_pit_out_lap,
@@ -210,9 +235,10 @@ export function findTopSpeed(laps: Lap[]): number | null {
 }
 
 export async function getDriverPerformances(sessionKey: number): Promise<DriverPerformance[]> {
-  const [laps, drivers, session] = await Promise.all([
+  const [laps, drivers, results, session] = await Promise.all([
     getSessionLaps(sessionKey),
     getSessionDrivers(sessionKey),
+    getSessionResult(sessionKey),
     getOrFetch(
       `session-info:${sessionKey}`,
       () => fetchJson("/sessions", { session_key: String(sessionKey) }, z.array(SessionSchema)),
@@ -228,11 +254,17 @@ export async function getDriverPerformances(sessionKey: number): Promise<DriverP
     lapsByDriver.set(lap.driver_number, existing);
   }
 
+  const resultByDriver = new Map(results.map((r) => [r.driver_number, r]));
+
   return drivers.map((driver) => {
     const driverLaps = lapsByDriver.get(driver.driver_number) ?? [];
+    const result = resultByDriver.get(driver.driver_number);
     return {
       driver,
-      bestLap: findBestLap(driverLaps),
+      bestLapTime: results.length > 0
+        ? result?.duration ?? null
+        : findBestLap(driverLaps)?.lap_duration ?? null,
+      position: result?.position ?? null,
       bestSectors: findBestSectors(driverLaps),
       topSpeed: findTopSpeed(driverLaps),
       lapCount: driverLaps.filter((l) => !l.is_pit_out_lap).length,
